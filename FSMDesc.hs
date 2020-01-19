@@ -7,20 +7,21 @@ import qualified Data.Map.Strict as M
 data Transition = Transition {
     transOutput :: TH.Exp,
     transNextState :: TH.Name,
-    transNextStateParams :: [TH.Exp]
+    transNextStateParams :: TH.Exp
 }
 
 data DecisionTree a = DTIf TH.Exp (DecisionTree a) (DecisionTree a)
                     | DTLeaf a
 
 data FSMState = FSMState {
-    fsmStateParams :: [TH.Name],
+    fsmStateParams :: TH.Pat,
     fsmStateTrans :: DecisionTree Transition
 }
 
 data FSM = FSM {
     fsmStates :: M.Map TH.Name FSMState,
-    fsmInputs :: [TH.Name],
-    fsmInitState :: TH.Name
+    fsmInputs :: TH.Pat,
+    fsmInitState :: TH.Name,
+    fsmInitStateParam :: TH.Exp
 }
 

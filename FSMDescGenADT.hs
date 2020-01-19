@@ -12,9 +12,17 @@ b = TH.Bang TH.NoSourceUnpackedness TH.NoSourceStrictness
 
 compileDT :: DecisionTree Transition -> TH.Q TH.Exp
 compileDT (DTLeaf tr) =
-    TH.tupE [TH.appsE $ TH.conE (conName $ transNextState tr) : map pure (transNextStateParams tr), pure $ transOutput tr]
+    TH.tupE [TH.conE (conName $ transNextState tr) `TH.appE` pure (transNextStateParams tr), pure $ transOutput tr]
 compileDT (DTIf e dt df) =
     TH.condE (pure e) (compileDT dt) (compileDT df)
+
+compilePat :: TH.Pat -> TH.Q ([TH.Name], TH.Type)
+compilePat (TH.VarP n) = do
+    n' <- TH.newName (TH.nameBase n)
+    return ([n'], TH.VarT n')
+compilePat (TH.TupP ts) = do
+    rs <- mapM compilePat ts
+    return (fst =<< rs, foldl TH.AppT (TH.TupleT $ length rs) $ map snd rs)
 
 compileFSM :: String -> FSM -> TH.Q [TH.Dec]
 compileFSM nm fsm = do
@@ -22,14 +30,14 @@ compileFSM nm fsm = do
     stateName <- TH.newName ("FSMState_" ++ nm)
     funcName <- TH.newName ("fsmFunc_" ++ nm)
     stateData <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
-        tps <- forM (fsmStateParams s) $ \n -> TH.newName (TH.nameBase n)
-        return (tps, TH.NormalC (conName n) (map (\t -> (b, TH.VarT t)) tps))
+        (tps, tp) <- compilePat $ fsmStateParams s 
+        return (tps, TH.NormalC (conName n) [(b, tp)])
     let stateCons = map snd stateData
     let tvars = map TH.PlainTV $ fst =<< stateData
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
-        TH.clause [TH.conP (conName n) (map TH.varP (fsmStateParams s)), TH.tupP (map TH.varP (fsmInputs fsm))] (TH.normalB $ compileDT $ fsmStateTrans s) []
+        TH.clause [TH.conP (conName n) [pure $ fsmStateParams s], pure $ fsmInputs fsm] (TH.normalB $ compileDT $ fsmStateTrans s) []
     return [TH.DataD [] stateName tvars Nothing stateCons [TH.DerivClause Nothing [TH.ConT ''Show]],
-            TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.ConE $ conName $ fsmInitState fsm) [],
+            TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName $ fsmInitState fsm) (fsmInitStateParam fsm)) [],
             TH.FunD funcName funcClauses]
 
 
