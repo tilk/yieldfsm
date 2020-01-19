@@ -1,10 +1,14 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveGeneric #-}
 module FSMDescGenADT where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 import Control.Monad
 import FSMDesc
+import Prelude
+import Data.List
+import GHC.Generics(Generic)
+import Clash.Prelude(NFDataX, BitPack)
 
 conName = TH.mkName . ("C" ++) . TH.nameBase
 
@@ -36,7 +40,7 @@ compileFSM nm fsm = do
     let tvars = map TH.PlainTV $ fst =<< stateData
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
         TH.clause [TH.conP (conName n) [pure $ fsmStateParams s], pure $ fsmInputs fsm] (TH.normalB $ compileDT $ fsmStateTrans s) []
-    return [TH.DataD [] stateName tvars Nothing stateCons [TH.DerivClause Nothing [TH.ConT ''Show]],
+    return [TH.DataD [] stateName tvars Nothing stateCons [TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT ''NFDataX]],
             TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName $ fsmInitState fsm) (fsmInitStateParam fsm)) [],
             TH.FunD funcName funcClauses]
 
