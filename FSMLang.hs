@@ -10,6 +10,7 @@ data Stmt = SVar TH.Name TH.Exp
           | SEmit TH.Exp
           | SRet TH.Exp
           | SCall TH.Name TH.Name TH.Exp
+          | STailcall TH.Name TH.Exp
           | SFun TH.Name TH.Pat Stmt
           | SSeq Stmt Stmt
           | SIf TH.Exp Stmt Stmt

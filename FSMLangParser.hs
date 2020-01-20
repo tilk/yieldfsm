@@ -22,7 +22,7 @@ parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
 parseHsExpToEOL = parseToEOL stringToHsExp
 parseHsPatToEOL = parseToEOL stringToHsPat
 
-idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "endif", "endfun"] }
+idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "tailcall", "if", "fun", "else", "begin", "end"] }
 
 singleSymbol s = runUnlined (symbol s) *> newlineOrEof
 
@@ -45,21 +45,28 @@ parseCall = SCall <$> runUnlined (symbol "call" *> parseName)
                   <*> runUnlined (symbolic '=' *> parseName)
                   <*> parseHsExpToEOL
 
+parseTailcall = STailcall <$> runUnlined (symbol "tailcall" *> parseName)
+                          <*> parseHsExpToEOL
+
 parseIf = SIf <$> (runUnlined (symbol "if") *> parseHsExpToEOL)
-              <*> parseStmt
-              <*> (singleSymbol "else" *> parseStmt <* singleSymbol "endif")
+              <*> parseBasicStmt
+              <*> ((singleSymbol "else" *> parseBasicStmt) <|> return SNop)
 
 parseFun = SFun <$> runUnlined (symbol "fun" *> parseName)
                 <*> parseHsPatToEOL
-                <*> (parseStmt <* singleSymbol "endfun")
+                <*> parseBasicStmt
+
+parseBlock = singleSymbol "begin" *> parseStmt <* singleSymbol "end"
 
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
              <|> parseRet
              <|> parseCall
+             <|> parseTailcall
              <|> parseIf
              <|> parseFun
+             <|> parseBlock
              <|> parseAssign
 
 parseStmt = foldr SSeq SNop <$> many parseBasicStmt
