@@ -16,3 +16,8 @@ data Stmt = SVar TH.Name TH.Exp
           | SNop
     deriving Show
 
+data Prog = Prog {
+    progInputs :: TH.Pat,
+    progBody :: Stmt
+}
+

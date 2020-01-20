@@ -63,3 +63,7 @@ parseBasicStmt = parseVar
              <|> parseAssign
 
 parseStmt = foldr SSeq SNop <$> many parseBasicStmt
+
+parseProg = Prog <$> (runUnlined (symbol "inputs") *> parseHsPatToEOL)
+                 <*> parseStmt
+
