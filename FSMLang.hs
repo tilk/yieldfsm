@@ -4,13 +4,15 @@ import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 import Prelude
 
-data Stmt = SVar TH.Name TH.Exp
+data VStmt = VExp TH.Exp
+           | VCall TH.Name TH.Exp
+    deriving Show
+
+data Stmt = SVar TH.Name VStmt
+          | SLet TH.Name VStmt
           | SAssign TH.Name TH.Exp
-          | SLet TH.Name TH.Exp
           | SEmit TH.Exp
-          | SRet TH.Exp
-          | SCall TH.Name TH.Name TH.Exp
-          | STailcall TH.Name TH.Exp
+          | SRet VStmt
           | SFun TH.Name TH.Pat Stmt
           | SSeq Stmt Stmt
           | SIf TH.Exp Stmt Stmt

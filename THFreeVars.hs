@@ -79,7 +79,7 @@ freeVarsBody (TH.NormalB e) = PatFV S.empty (freeVarsExp e)
 freeVarsBody (TH.GuardedB ges) = undefined
 
 freeVarsMatch :: TH.Match -> S.Set TH.Name
-freeVarsMatch (Match p b ds) = undefined
+freeVarsMatch (TH.Match p b ds) = undefined
 
 
 

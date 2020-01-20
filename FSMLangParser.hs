@@ -22,31 +22,24 @@ parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
 parseHsExpToEOL = parseToEOL stringToHsExp
 parseHsPatToEOL = parseToEOL stringToHsPat
 
-idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "tailcall", "if", "fun", "else", "begin", "end"] }
+idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end"] }
 
 singleSymbol s = runUnlined (symbol s) *> newlineOrEof
 
 parseName = TH.mkName <$> ident idStyle
 
 parseVar = SVar <$> runUnlined (symbol "var" *> parseName <* symbolic '=')
-                <*> parseHsExpToEOL
+                <*> parseVStmt
 
 parseAssign = SAssign <$> runUnlined (parseName <* symbolic '=')
                       <*> parseHsExpToEOL
 
 parseLet = SLet <$> runUnlined (symbol "let" *> parseName <* symbolic '=')
-                <*> parseHsExpToEOL
+                <*> parseVStmt
 
 parseEmit = SEmit <$> (runUnlined (symbol "emit") *> parseHsExpToEOL)
 
-parseRet = SRet <$> (runUnlined (symbol "ret") *> parseHsExpToEOL)
-
-parseCall = SCall <$> runUnlined (symbol "call" *> parseName)
-                  <*> runUnlined (symbolic '=' *> parseName)
-                  <*> parseHsExpToEOL
-
-parseTailcall = STailcall <$> runUnlined (symbol "tailcall" *> parseName)
-                          <*> parseHsExpToEOL
+parseRet = SRet <$> (runUnlined (symbol "ret") *> parseVStmt)
 
 parseIf = SIf <$> (runUnlined (symbol "if") *> parseHsExpToEOL)
               <*> parseBasicStmt
@@ -62,14 +55,20 @@ parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
              <|> parseRet
-             <|> parseCall
-             <|> parseTailcall
              <|> parseIf
              <|> parseFun
              <|> parseBlock
              <|> parseAssign
 
 parseStmt = foldr SSeq SNop <$> many parseBasicStmt
+
+parseVCall = VCall <$> runUnlined (symbol "call" *> parseName)
+                   <*> parseHsExpToEOL
+
+parseVExp = VExp <$> parseHsExpToEOL
+
+parseVStmt = parseVCall
+         <|> parseVExp
 
 parseProg = Prog <$> (runUnlined (symbol "inputs") *> parseHsPatToEOL)
                  <*> parseStmt
