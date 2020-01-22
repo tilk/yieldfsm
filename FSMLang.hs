@@ -13,14 +13,14 @@ data Stmt = SVar TH.Name VStmt
           | SAssign TH.Name TH.Exp
           | SEmit TH.Exp
           | SRet VStmt
-          | SFun TH.Name TH.Pat Stmt
-          | SSeq Stmt Stmt
+          | SFun (M.Map TH.Name (TH.Pat, Stmt))
+          | SBlock [Stmt]
           | SIf TH.Exp Stmt Stmt
           | SNop
     deriving Show
 
 data Prog = Prog {
     progInputs :: TH.Pat,
-    progBody :: Stmt
+    progBody :: [Stmt]
 }
 

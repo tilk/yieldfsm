@@ -10,6 +10,7 @@ import Control.Applicative
 import Control.Monad
 import Prelude
 import qualified Data.HashSet as HS
+import qualified Data.Map.Strict as M
 
 e2m (Left s) = fail s
 e2m (Right r) = return r
@@ -45,11 +46,14 @@ parseIf = SIf <$> (runUnlined (symbol "if") *> parseHsExpToEOL)
               <*> parseBasicStmt
               <*> ((singleSymbol "else" *> parseBasicStmt) <|> return SNop)
 
-parseFun = SFun <$> runUnlined (symbol "fun" *> parseName)
-                <*> parseHsPatToEOL
-                <*> parseBasicStmt
+parseFun1 = f <$> runUnlined (symbol "fun" *> parseName)
+              <*> parseHsPatToEOL
+              <*> parseBasicStmt
+    where f a b c = (a, (b, c))
 
-parseBlock = singleSymbol "begin" *> parseStmt <* singleSymbol "end"
+parseFun = SFun . M.fromList <$> some parseFun1
+
+parseBlock = SBlock <$> (singleSymbol "begin" *> parseStmt <* singleSymbol "end")
 
 parseBasicStmt = parseVar
              <|> parseLet
@@ -60,7 +64,7 @@ parseBasicStmt = parseVar
              <|> parseBlock
              <|> parseAssign
 
-parseStmt = foldr SSeq SNop <$> many parseBasicStmt
+parseStmt = many parseBasicStmt
 
 parseVCall = VCall <$> runUnlined (symbol "call" *> parseName)
                    <*> parseHsExpToEOL

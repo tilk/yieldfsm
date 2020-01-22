@@ -2,6 +2,7 @@ module THFreeVars where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 import Prelude
 import Data.Maybe(maybe)
 
@@ -81,5 +82,39 @@ freeVarsBody (TH.GuardedB ges) = undefined
 freeVarsMatch :: TH.Match -> S.Set TH.Name
 freeVarsMatch (TH.Match p b ds) = undefined
 
+substExp :: M.Map TH.Name TH.Exp -> TH.Exp -> TH.Exp
+substExp s e@(TH.VarE v) | Just ve <- M.lookup v s = ve
+                         | otherwise = e
+substExp s e@(TH.ConE _) = e
+substExp s e@(TH.LitE _) = e
+substExp s   (TH.AppE e1 e2) = TH.AppE (substExp s e1) (substExp s e2)
+substExp s   (TH.AppTypeE e t) = TH.AppTypeE (substExp s e) t
+substExp s   (TH.InfixE me1 e me2) = TH.InfixE (substExp s <$> me1) (substExp s e) (substExp s <$> me2)
+substExp s   (TH.UInfixE e1 e e2) = TH.UInfixE (substExp s e1) (substExp s e) (substExp s e2)
+substExp s   (TH.ParensE e) = TH.ParensE (substExp s e)
+substExp s   (TH.LamE ps e) = TH.LamE (substPat s <$> ps) (substExp (cutSubst (patUnions $ map freeVarsPat ps) s) e)
 
+substFieldPat :: M.Map TH.Name TH.Exp -> TH.FieldPat -> TH.FieldPat
+substFieldPat s (n, p) = (n, substPat s p)
+
+substPat :: M.Map TH.Name TH.Exp -> TH.Pat -> TH.Pat
+substPat s p@(TH.LitP _) = p
+substPat s p@(TH.VarP n) = p
+substPat s   (TH.TupP ps) = TH.TupP (substPat s <$> ps)
+substPat s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (substPat s <$> ps)
+substPat s   (TH.ConP n ps) = TH.ConP n (substPat s <$> ps)
+substPat s   (TH.InfixP p1 n p2) = TH.InfixP (substPat s p1) n (substPat s p2)
+substPat s   (TH.UInfixP p1 n p2) = TH.UInfixP (substPat s p1) n (substPat s p2)
+substPat s   (TH.ParensP p) = TH.ParensP (substPat s p)
+substPat s   (TH.TildeP p) = TH.TildeP (substPat s p)
+substPat s   (TH.BangP p) = TH.BangP (substPat s p)
+substPat s   (TH.AsP n p) = TH.AsP n (substPat s p)
+substPat s p@(TH.WildP) = p
+substPat s   (TH.RecP n fps) = TH.RecP n (substFieldPat s <$> fps)
+substPat s   (TH.ListP ps) = TH.ListP (substPat s <$> ps)
+substPat s   (TH.SigP p t) = TH.SigP (substPat s p) t
+substPat s   (TH.ViewP e p) = TH.ViewP (substExp s e) (substPat s p)
+
+cutSubst :: PatFV -> M.Map TH.Name TH.Exp -> M.Map TH.Name TH.Exp
+cutSubst (PatFV vs _) s = M.withoutKeys s vs
 
