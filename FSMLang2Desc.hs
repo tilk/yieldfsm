@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module FSMLang2Desc where
 
 import qualified Data.Map.Strict as M
@@ -12,12 +13,15 @@ stmt2dtree (SBlock ss) = stmts2dtree ss
 
 stmts2dtree :: [Stmt] -> DecisionTree Transition
 stmts2dtree [SEmit e, SRet (VCall n ec)] = DTLeaf $ Transition e n ec
+stmts2dtree (SLet n (VExp e) : ss) = DTLet (TH.VarP n) e (stmts2dtree ss)
 
 fun2state :: (TH.Pat, Stmt) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree s)
 
-lang2desc :: Prog -> FSM
-lang2desc (Prog is [SFun fs, SRet (VCall f1 e1)]) = FSM {
+lang2desc :: Prog -> Maybe FSM
+lang2desc p = nprog2desc <$> toNProg p
+
+nprog2desc (NProg is fs f1 e1) = FSM { 
     fsmStates = M.map fun2state fs,
     fsmInputs = is,
     fsmInitState = f1,

@@ -9,8 +9,10 @@ import Prelude
 import Text.Trifecta
 
 mkFSM :: String -> TH.Q [TH.Dec]
-mkFSM str = compileFSM "fsm" $ lang2desc p
-    where Success p = parseString parseProg mempty str
+mkFSM str = compileFSM "fsm" f
+    where
+    Success p = parseString parseProg mempty str
+    Just f = lang2desc p
 
 fsm = THQ.QuasiQuoter undefined undefined undefined mkFSM
 

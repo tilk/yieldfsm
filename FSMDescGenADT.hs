@@ -19,6 +19,8 @@ compileDT (DTLeaf tr) =
     TH.tupE [TH.conE (conName $ transNextState tr) `TH.appE` pure (transNextStateParams tr), pure $ transOutput tr]
 compileDT (DTIf e dt df) =
     TH.condE (pure e) (compileDT dt) (compileDT df)
+compileDT (DTLet p e d) =
+    TH.letE [TH.valD (pure p) (TH.normalB $ pure e) []] (compileDT d)
 
 compilePat :: TH.Pat -> TH.Q ([TH.Name], TH.Type)
 compilePat (TH.VarP n) = do
