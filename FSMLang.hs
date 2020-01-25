@@ -10,12 +10,12 @@ data VStmt = VExp TH.Exp
            | VCall TH.Name TH.Exp
     deriving Show
 
-data Stmt = SVar TH.Name VStmt
-          | SLet TH.Name VStmt
+data Stmt = SVar TH.Name VStmt Stmt
+          | SLet TH.Name VStmt Stmt
           | SAssign TH.Name TH.Exp
           | SEmit TH.Exp
           | SRet VStmt
-          | SFun FunMap
+          | SFun FunMap Stmt
           | SBlock [Stmt]
           | SIf TH.Exp Stmt Stmt
           | SNop
@@ -23,17 +23,22 @@ data Stmt = SVar TH.Name VStmt
 
 data Prog = Prog {
     progInputs :: TH.Pat,
-    progBody :: [Stmt]
-}
+    progBody :: Stmt
+} deriving Show
 
 data NProg = NProg {
     nProgInputs :: TH.Pat,
     nProgFuns :: FunMap,
     nProgInit :: TH.Name,
     nProgInitParam :: TH.Exp
-}
+} deriving Show
 
 toNProg :: Prog -> Maybe NProg
-toNProg (Prog is [SFun fs, SRet (VCall f1 e1)]) = Just (NProg is fs f1 e1)
+toNProg (Prog is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg is fs f1 e1)
 toNProg _ = Nothing
+
+sBlock :: [Stmt] -> Stmt
+sBlock [] = SNop
+sBlock [s] = s
+sBlock ss = SBlock ss
 

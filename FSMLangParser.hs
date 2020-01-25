@@ -31,12 +31,14 @@ parseName = TH.mkName <$> ident idStyle
 
 parseVar = SVar <$> runUnlined (symbol "var" *> parseName <* symbolic '=')
                 <*> parseVStmt
+                <*> parseBasicStmt
 
 parseAssign = SAssign <$> runUnlined (parseName <* symbolic '=')
                       <*> parseHsExpToEOL
 
 parseLet = SLet <$> runUnlined (symbol "let" *> parseName <* symbolic '=')
                 <*> parseVStmt
+                <*> parseBasicStmt
 
 parseEmit = SEmit <$> (runUnlined (symbol "emit") *> parseHsExpToEOL)
 
@@ -51,7 +53,8 @@ parseFun1 = f <$> runUnlined (symbol "fun" *> parseName)
               <*> parseBasicStmt
     where f a b c = (a, (b, c))
 
-parseFun = SFun . M.fromList <$> some parseFun1
+parseFun = SFun <$> (M.fromList <$> some parseFun1)
+                <*> parseBasicStmt
 
 parseBlock = SBlock <$> (singleSymbol "begin" *> parseStmt <* singleSymbol "end")
 
@@ -75,5 +78,5 @@ parseVStmt = parseVCall
          <|> parseVExp
 
 parseProg = Prog <$> (runUnlined (symbol "inputs") *> parseHsPatToEOL)
-                 <*> parseStmt
+                 <*> parseBasicStmt
 

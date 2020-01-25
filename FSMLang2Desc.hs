@@ -10,10 +10,10 @@ import Prelude
 stmt2dtree :: Stmt -> DecisionTree Transition
 stmt2dtree (SIf e s1 s2) = DTIf e (stmt2dtree s1) (stmt2dtree s2)
 stmt2dtree (SBlock ss) = stmts2dtree ss
+stmt2dtree (SLet n (VExp e) s) = DTLet (TH.VarP n) e (stmt2dtree s)
 
 stmts2dtree :: [Stmt] -> DecisionTree Transition
 stmts2dtree [SEmit e, SRet (VCall n ec)] = DTLeaf $ Transition e n ec
-stmts2dtree (SLet n (VExp e) : ss) = DTLet (TH.VarP n) e (stmts2dtree ss)
 
 fun2state :: (TH.Pat, Stmt) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree s)
