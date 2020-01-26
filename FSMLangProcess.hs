@@ -73,7 +73,7 @@ cutBlocks :: THS.Quasi m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1) = do
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
         s' <- cutBlocksStmt n s SNop
-        modify $ M.insert n (p, s)
+        modify $ M.insert n (p, s')
     return $ NProg is fs' f1 e1
 
 
