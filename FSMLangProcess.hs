@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TupleSections #-}
 module FSMLangProcess where
 
 import FSMLang
@@ -6,6 +6,8 @@ import FSMFreeVars
 import Prelude
 import Control.Monad
 import Control.Monad.State
+import Control.Monad.Writer
+import Control.Monad.Reader
 import Control.Lens
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
@@ -27,52 +29,66 @@ lambdaLift s = return s
 refreshName :: (THS.Quasi m, MonadTrans t) => TH.Name -> t m TH.Name
 refreshName n = lift $ THS.qNewName $ TH.nameBase n
 
+refreshPat :: (THS.Quasi m, MonadTrans t, Monad (t m)) => TH.Pat -> t m (TH.Pat, M.Map TH.Name TH.Name)
+refreshPat p = runWriterT (f p) where
+    f p@(TH.LitP _) = return p
+    f   (TH.VarP v) = do
+        v' <- lift $ refreshName v
+        writer (TH.VarP v', M.singleton v v')
+    f   (TH.TupP ps) = TH.TupP <$> mapM f ps
+    f   (TH.UnboxedTupP ps) = TH.UnboxedTupP <$> mapM f ps
+    f   (TH.UnboxedSumP p x y) = TH.UnboxedSumP <$> f p <*> pure x <*> pure y
+    f   (TH.ConP n ps) = TH.ConP n <$> mapM f ps
+    f   (TH.InfixP p1 n p2) = TH.InfixP <$> f p1 <*> pure n <*> f p2
+    f   (TH.UInfixP p1 n p2) = TH.UInfixP <$> f p1 <*> pure n <*> f p2
+    f   (TH.ParensP p) = TH.ParensP <$> f p
+    f   (TH.TildeP p) = TH.TildeP <$> f p
+    f   (TH.BangP p) = TH.BangP <$> f p
+    f   (TH.AsP v p) = do
+        v' <- lift $ refreshName v
+        p' <- f p
+        writer (TH.AsP v' p', M.singleton v v')
+    f p@(TH.WildP) = return p
+    f   (TH.RecP n fps) = TH.RecP n <$> forM fps (\(n, p) -> (n,) <$> f p)
+    f   (TH.ListP ps) = TH.ListP <$> mapM f ps
+    f   (TH.SigP p t) = TH.SigP <$> f p <*> pure t
+    f   (TH.ViewP e p) = TH.ViewP e <$> f p
+
 simpleStmt SNop = True
 simpleStmt (SRet (VCall _ _)) = True
 simpleStmt _ = False
 
-cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => TH.Name -> Stmt -> Stmt -> t m Stmt
-cutBlocksStmt n SNop s' = return s'
-cutBlocksStmt n (SRet vs) s' = return $ SRet vs
-cutBlocksStmt n (SBlock []) s' = return s'
-cutBlocksStmt n (SBlock [s]) s' = cutBlocksStmt n s s'
-cutBlocksStmt n (SBlock (s:ss)) s' = do
-    s'' <- cutBlocksStmt n (SBlock ss) s'
-    cutBlocksStmt n s s''
-cutBlocksStmt n (SEmit e) s' | simpleStmt s' =
+cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
+cutBlocksStmt fv n SNop s' = return s'
+cutBlocksStmt fv n (SRet vs) s' = return $ SRet vs
+cutBlocksStmt fv n (SBlock []) s' = return s'
+cutBlocksStmt fv n (SBlock [s]) s' = cutBlocksStmt fv n s s'
+cutBlocksStmt fv n (SBlock (s:ss)) s' = do
+    s'' <- cutBlocksStmt fv n (SBlock ss) s'
+    cutBlocksStmt fv n s s''
+cutBlocksStmt fv n (SEmit e) s' | simpleStmt s' =
     return $ SBlock [SEmit e, s']
-cutBlocksStmt n (SIf e st sf) s' | simpleStmt s' =
-    SIf e <$> cutBlocksStmt n st s' <*> cutBlocksStmt n sf s'
-cutBlocksStmt n (SLet ln vs s) s' | simpleStmt s' = do
+cutBlocksStmt fv n (SIf e st sf) s' | simpleStmt s' =
+    SIf e <$> cutBlocksStmt fv n st s' <*> cutBlocksStmt fv n sf s'
+cutBlocksStmt fv n (SCase e cs) s' | simpleStmt s' =
+    SCase e <$> mapM cf cs where
+        cf (p, s) = do
+            (p', su) <- refreshPat p
+            (p',) <$> cutBlocksStmt fv n (renameStmt su s) s'
+cutBlocksStmt fv n (SLet ln vs s) s' | simpleStmt s' = do
     ln' <- refreshName ln
-    SLet ln' vs <$> cutBlocksStmt n (renameStmt (M.singleton ln ln') s) s'
-cutBlocksStmt n s s' = do
-    let vs = S.toList $ freeVarsStmt s'
+    SLet ln' vs <$> cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
+cutBlocksStmt fv n s s' = do
+    let vs = S.toList $ freeVarsStmt s' `S.difference` fv
     n' <- refreshName n
     modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s')
-    cutBlocksStmt n s (SRet (VCall n' (TH.TupE $ map TH.VarE vs)))
+    cutBlocksStmt fv n s (SRet (VCall n' (TH.TupE $ map TH.VarE vs)))
 
-{-
-cutBlocksStmts :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => TH.Name -> [Stmt] -> t m Stmt
-cutBlocksStmts n [] = return SNop
-cutBlocksStmts n (s:ss) = cutBlocksStmt n s ss
-
-cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => TH.Name -> Stmt -> [Stmt] -> t m Stmt
-cutBlocksStmt n (SLet n' vs s) ss = 
-cutBlocksStmt n (SBlock []) ss = cutBlocksStmts n ss
-cutBlocksStmt n (SBlock (s:ss')) ss = cutBlocksStmt n s (ss' ++ ss)
-cutBlocksStmt n (SEmit e) [SRet (VCall n' e')] = return $ SBlock [SEmit e, SRet (VCall n' e')]
-cutBlocksStmt n (SEmit e) ss = do
-    let vs = S.toList $ freeVarsStmts ss
-    n' <- refreshName n
-    ss' <- cutBlocksStmts n ss
-    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, ss')
-    return $ SBlock [SEmit e, SRet (VCall n' (TH.TupE $ map TH.VarE vs))]
--}
 cutBlocks :: THS.Quasi m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1) = do
+    let fvs = freeVarsStmt $ SFun fs SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
-        s' <- cutBlocksStmt n s SNop
+        s' <- cutBlocksStmt fvs n s SNop
         modify $ M.insert n (p, s')
     return $ NProg is fs' f1 e1
 

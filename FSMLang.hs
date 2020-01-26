@@ -18,6 +18,7 @@ data Stmt = SVar TH.Name VStmt Stmt
           | SFun FunMap Stmt
           | SBlock [Stmt]
           | SIf TH.Exp Stmt Stmt
+          | SCase TH.Exp [(TH.Pat, Stmt)]
           | SNop
     deriving Show
 

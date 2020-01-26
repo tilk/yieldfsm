@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module FSMLangParser where
 
 import qualified Language.Haskell.TH as TH
@@ -23,7 +24,7 @@ parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
 parseHsExpToEOL = parseToEOL stringToHsExp
 parseHsPatToEOL = parseToEOL stringToHsPat
 
-idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end"] }
+idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
 
 singleSymbol s = runUnlined (symbol s) *> newlineOrEof
 
@@ -58,11 +59,18 @@ parseFun = SFun <$> (M.fromList <$> some parseFun1)
 
 parseBlock = SBlock <$> (singleSymbol "begin" *> parseStmt <* singleSymbol "end")
 
+parseCase = SCase <$> (runUnlined (symbol "case") *> parseHsExpToEOL)
+                  <*> some parseCase1
+
+parseCase1 = (,) <$> (runUnlined (symbolic '|') *> parseHsPatToEOL)
+                 <*> parseBasicStmt
+
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
              <|> parseRet
              <|> parseIf
+             <|> parseCase
              <|> parseFun
              <|> parseBlock
              <|> parseAssign

@@ -12,6 +12,7 @@ data Transition = Transition {
 
 data DecisionTree a = DTIf TH.Exp (DecisionTree a) (DecisionTree a)
                     | DTLet TH.Pat TH.Exp (DecisionTree a)
+                    | DTCase TH.Exp [(TH.Pat, DecisionTree a)]
                     | DTLeaf a
 
 data FSMState = FSMState {

@@ -20,6 +20,8 @@ compileDT cn (DTLeaf tr) =
     TH.tupE [TH.conE (conName cn $ transNextState tr) `TH.appE` pure (transNextStateParams tr), pure $ transOutput tr]
 compileDT cn (DTIf e dt df) =
     TH.condE (pure e) (compileDT cn dt) (compileDT cn df)
+compileDT cn (DTCase e cs) =
+    TH.caseE (pure e) (flip map cs $ \(p, d) -> TH.match (pure p) (TH.normalB $ compileDT cn d) [])
 compileDT cn (DTLet p e d) =
     TH.letE [TH.valD (pure p) (TH.normalB $ pure e) []] (compileDT cn d)
 
