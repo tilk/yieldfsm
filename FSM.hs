@@ -15,7 +15,9 @@ mkFSM str = do
     TH.runIO $ print np
     np' <- cutBlocks np
     TH.runIO $ print np'
-    compileFSM "fsm" (nprog2desc np')
+    let np'' = removeEpsilon np'
+    TH.runIO $ print np''
+    compileFSM "fsm" (nprog2desc np'')
     where
     Success p = parseString parseProg mempty str
     Just np = toNProg p

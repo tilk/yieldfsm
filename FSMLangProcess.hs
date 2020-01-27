@@ -58,7 +58,7 @@ simpleStmt SNop = True
 simpleStmt (SRet (VCall _ _)) = True
 simpleStmt _ = False
 
-cutBlocksStmt :: (THS.Quasi m, MonadWriter FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
+cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
 cutBlocksStmt fv n SNop s' = return s'
 cutBlocksStmt fv n (SRet vs) s' = return $ SRet vs
 cutBlocksStmt fv n (SBlock []) s' = return s'
@@ -81,15 +81,36 @@ cutBlocksStmt fv n (SLet ln vs@(VExp e) s) s' | simpleStmt s' = do
 cutBlocksStmt fv n s s' = do
     let vs = S.toList $ freeVarsStmt s' `S.difference` fv
     n' <- refreshName n
-    tell $ M.singleton n' (TH.TupP $ map TH.VarP vs, s')
+    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s')
     cutBlocksStmt fv n s (SRet (VCall n' (TH.TupE $ map TH.VarE vs)))
 
 cutBlocks :: THS.Quasi m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1) = do
     let fvs = freeVarsStmt $ SFun fs SNop
-    fs' <- execWriterT $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
+    fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
         s' <- cutBlocksStmt fvs n s SNop
-        tell $ M.singleton n (p, s')
+        modify $ M.insert n (p, s')
     return $ NProg is fs' f1 e1
 
+removeEpsilonStmt fs s@SNop = return s
+removeEpsilonStmt fs s@(SEmit _) = return s
+removeEpsilonStmt fs   (SIf e st sf) = SIf e <$> removeEpsilonStmt fs st <*> removeEpsilonStmt fs sf
+removeEpsilonStmt fs   (SLet ln vs s) = SLet ln vs <$> removeEpsilonStmt fs s
+removeEpsilonStmt fs   (SCase e cs) = SCase e <$> mapM cf cs where
+    cf (p, s) = (p,) <$> removeEpsilonStmt fs s
+removeEpsilonStmt fs s@(SBlock [SEmit e,SRet (VCall f e')]) = removeEpsilonFrom fs f >> return s
+removeEpsilonStmt fs   (SRet (VCall f e)) = SCase e <$> (return . (p,) <$> removeEpsilonStmt fs s) where
+    Just (p, s) = M.lookup f fs
+
+removeEpsilonFrom fs f = do
+    b <- gets (M.member f)
+    unless b $ do
+        modify $ M.insert f (p, SNop)
+        s' <- removeEpsilonStmt fs s
+        modify $ M.insert f (p, s')
+    where Just (p, s) = M.lookup f fs
+
+removeEpsilon :: NProg -> NProg
+removeEpsilon (NProg is fs f1 e1) = NProg is fs' f1 e1
+    where fs' = flip execState M.empty $ removeEpsilonFrom fs f1
 
