@@ -58,7 +58,7 @@ simpleStmt SNop = True
 simpleStmt (SRet (VCall _ _)) = True
 simpleStmt _ = False
 
-cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
+cutBlocksStmt :: (THS.Quasi m, MonadWriter FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
 cutBlocksStmt fv n SNop s' = return s'
 cutBlocksStmt fv n (SRet vs) s' = return $ SRet vs
 cutBlocksStmt fv n (SBlock []) s' = return s'
@@ -75,21 +75,21 @@ cutBlocksStmt fv n (SCase e cs) s' | simpleStmt s' =
         cf (p, s) = do
             (p', su) <- refreshPat p
             (p',) <$> cutBlocksStmt fv n (renameStmt su s) s'
-cutBlocksStmt fv n (SLet ln vs s) s' | simpleStmt s' = do
+cutBlocksStmt fv n (SLet ln vs@(VExp e) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
     SLet ln' vs <$> cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
 cutBlocksStmt fv n s s' = do
     let vs = S.toList $ freeVarsStmt s' `S.difference` fv
     n' <- refreshName n
-    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s')
+    tell $ M.singleton n' (TH.TupP $ map TH.VarP vs, s')
     cutBlocksStmt fv n s (SRet (VCall n' (TH.TupE $ map TH.VarE vs)))
 
 cutBlocks :: THS.Quasi m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1) = do
     let fvs = freeVarsStmt $ SFun fs SNop
-    fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
+    fs' <- execWriterT $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
         s' <- cutBlocksStmt fvs n s SNop
-        modify $ M.insert n (p, s')
+        tell $ M.singleton n (p, s')
     return $ NProg is fs' f1 e1
 
 
