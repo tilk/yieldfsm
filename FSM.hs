@@ -11,16 +11,20 @@ import Prelude
 import Text.Trifecta
 
 mkFSM :: String -> TH.Q [TH.Dec]
-mkFSM str = do
-    TH.runIO $ print np
-    np' <- cutBlocks np
-    TH.runIO $ print np'
-    let np'' = removeEpsilon np'
-    TH.runIO $ print np''
-    compileFSM "fsm" (nprog2desc np'')
+mkFSM str 
+    | Success p <- pr = do
+        let Just np = toNProg p
+        TH.runIO $ print np
+        np' <- cutBlocks np
+        TH.runIO $ print np'
+        let np'' = removeEpsilon np'
+        TH.runIO $ print np''
+        compileFSM "fsm" (nprog2desc np'')
+    | Failure e <- pr = do
+        TH.runIO $ print $ _errDoc e
+        fail "FAIL"
     where
-    Success p = parseString parseProg mempty str
-    Just np = toNProg p
+    pr = parseString parseProg mempty str
 
 fsm = THQ.QuasiQuoter undefined undefined undefined mkFSM
 
