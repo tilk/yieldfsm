@@ -18,6 +18,8 @@ e2m (Right r) = return r
 
 newlineOrEof = (newline *> return ()) <|> eof
 
+ssymbol s = (try $ whiteSpace *> symbol s) <?> s
+
 stringToHsExp s = HM.toExp <$> HM.parseHsExp s
 stringToHsPat s = HM.toPat <$> HM.parseHsPat s
 parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
@@ -26,30 +28,30 @@ parseHsPatToEOL = parseToEOL stringToHsPat
 
 idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
 
-singleSymbol s = runUnlined (symbol s) *> newlineOrEof
+singleSymbol s = runUnlined (ssymbol s) *> newlineOrEof
 
 parseName = TH.mkName <$> ident idStyle
 
-parseVar = SVar <$> runUnlined (symbol "var" *> parseName <* symbolic '=')
+parseVar = SVar <$> runUnlined (ssymbol "var" *> parseName <* symbolic '=')
                 <*> parseVStmt
                 <*> parseBasicStmt
 
 parseAssign = SAssign <$> runUnlined (parseName <* symbolic '=')
                       <*> parseHsExpToEOL
 
-parseLet = SLet <$> runUnlined (symbol "let" *> parseName <* symbolic '=')
+parseLet = SLet <$> runUnlined (ssymbol "let" *> parseName <* symbolic '=')
                 <*> parseVStmt
                 <*> parseBasicStmt
 
-parseEmit = SEmit <$> (runUnlined (symbol "emit") *> parseHsExpToEOL)
+parseEmit = SEmit <$> (runUnlined (ssymbol "emit") *> parseHsExpToEOL)
 
-parseRet = SRet <$> (runUnlined (symbol "ret") *> parseVStmt)
+parseRet = SRet <$> (runUnlined (ssymbol "ret") *> parseVStmt)
 
-parseIf = SIf <$> (runUnlined (symbol "if") *> parseHsExpToEOL)
+parseIf = SIf <$> (runUnlined (ssymbol "if") *> parseHsExpToEOL)
               <*> parseBasicStmt
               <*> ((singleSymbol "else" *> parseBasicStmt) <|> return SNop)
 
-parseFun1 = f <$> runUnlined (symbol "fun" *> parseName)
+parseFun1 = f <$> runUnlined (ssymbol "fun" *> parseName)
               <*> parseHsPatToEOL
               <*> parseBasicStmt
     where f a b c = (a, (b, c))
@@ -59,10 +61,10 @@ parseFun = SFun <$> (M.fromList <$> some parseFun1)
 
 parseBlock = SBlock <$> (singleSymbol "begin" *> parseStmt <* singleSymbol "end")
 
-parseCase = SCase <$> (runUnlined (symbol "case") *> parseHsExpToEOL)
+parseCase = SCase <$> (runUnlined (ssymbol "case") *> parseHsExpToEOL)
                   <*> some parseCase1
 
-parseCase1 = (,) <$> (runUnlined (symbolic '|') *> parseHsPatToEOL)
+parseCase1 = (,) <$> (runUnlined (ssymbol "|") *> parseHsPatToEOL)
                  <*> parseBasicStmt
 
 parseBasicStmt = parseVar
@@ -77,7 +79,7 @@ parseBasicStmt = parseVar
 
 parseStmt = many parseBasicStmt
 
-parseVCall = VCall <$> runUnlined (symbol "call" *> parseName)
+parseVCall = VCall <$> runUnlined (ssymbol "call" *> parseName)
                    <*> parseHsExpToEOL
 
 parseVExp = VExp <$> parseHsExpToEOL
@@ -85,6 +87,6 @@ parseVExp = VExp <$> parseHsExpToEOL
 parseVStmt = parseVCall
          <|> parseVExp
 
-parseProg = Prog <$> (runUnlined (symbol "inputs") *> parseHsPatToEOL)
+parseProg = Prog <$> (runUnlined (ssymbol "inputs") *> parseHsPatToEOL)
                  <*> parseBasicStmt
 
