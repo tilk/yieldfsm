@@ -26,7 +26,7 @@ parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
 parseHsExpToEOL = parseToEOL stringToHsExp
 parseHsPatToEOL = parseToEOL stringToHsPat
 
-idStyle = haskellIdents { _styleReserved = HS.fromList ["var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
+idStyle = haskellIdents { _styleReserved = HS.fromList ["nop", "var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
 
 singleSymbol s = runUnlined (ssymbol s) *> newlineOrEof
 
@@ -67,6 +67,8 @@ parseCase = SCase <$> (runUnlined (ssymbol "case") *> parseHsExpToEOL)
 parseCase1 = (,) <$> (runUnlined (ssymbol "|") *> parseHsPatToEOL)
                  <*> parseBasicStmt
 
+parseNop = singleSymbol "nop" *> return SNop
+
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
@@ -75,6 +77,7 @@ parseBasicStmt = parseVar
              <|> parseCase
              <|> parseFun
              <|> parseBlock
+             <|> parseNop
              <|> parseAssign
 
 parseStmt = many parseBasicStmt
