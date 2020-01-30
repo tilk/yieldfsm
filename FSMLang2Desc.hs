@@ -23,10 +23,11 @@ fun2state (p, s) = FSMState p (stmt2dtree s)
 lang2desc :: Prog -> Maybe FSM
 lang2desc p = nprog2desc <$> toNProg p
 
-nprog2desc (NProg is fs f1 e1) = FSM { 
+nprog2desc (NProg is fs f1 e1 cs) = FSM { 
     fsmStates = M.map fun2state fs,
     fsmInputs = is,
     fsmInitState = f1,
-    fsmInitStateParam = e1
+    fsmInitStateParam = e1,
+    fsmConts = cs
 }
 

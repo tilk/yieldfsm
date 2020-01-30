@@ -31,11 +31,12 @@ data NProg = NProg {
     nProgInputs :: TH.Pat,
     nProgFuns :: FunMap,
     nProgInit :: TH.Name,
-    nProgInitParam :: TH.Exp
+    nProgInitParam :: TH.Exp,
+    nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving Show
 
 toNProg :: Prog -> Maybe NProg
-toNProg (Prog is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg is fs f1 e1)
+toNProg (Prog is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg is fs f1 e1 M.empty)
 toNProg _ = Nothing
 
 sBlock :: [Stmt] -> Stmt

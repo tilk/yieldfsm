@@ -7,6 +7,7 @@ import FSMDescGenADT
 import FSMLangProcess
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Quote as THQ
+import Control.Monad.State
 import Prelude
 import Text.Trifecta
 
@@ -15,7 +16,9 @@ mkFSM str
     | Success p <- pr = do
         let Just np = toNProg p
         TH.runIO $ print np
-        np' <- cutBlocks np
+        np0 <- cutBlocks np
+        TH.runIO $ print np0
+        np' <- deTailCall np0
         TH.runIO $ print np'
         let np'' = removeEpsilon np'
         TH.runIO $ print np''

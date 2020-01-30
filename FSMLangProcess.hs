@@ -13,6 +13,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Syntax as THS
+import Debug.Trace
 
 {-
 data LifterState = LifterState {
@@ -26,14 +27,25 @@ lambdaLift (SSeq s1 s2) = SSeq <$> lambdaLift s1 <*> lambdaLift s2
 lambdaLift s = return s
 -}
 
-refreshName :: (THS.Quasi m, MonadTrans t) => TH.Name -> t m TH.Name
-refreshName n = lift $ THS.qNewName $ TH.nameBase n
+-- Name refreshing
 
-refreshPat :: (THS.Quasi m, MonadTrans t, Monad (t m)) => TH.Pat -> t m (TH.Pat, M.Map TH.Name TH.Name)
+class Monad m => MonadRefresh m where
+    refreshName :: TH.Name -> m TH.Name
+
+instance MonadRefresh TH.Q where
+    refreshName n = TH.newName $ TH.nameBase n
+
+instance (Monoid s, MonadRefresh m) => MonadRefresh (WriterT s m) where
+    refreshName = lift . refreshName
+
+instance MonadRefresh m => MonadRefresh (StateT s m) where
+    refreshName = lift . refreshName
+
+refreshPat :: MonadRefresh m => TH.Pat -> m (TH.Pat, M.Map TH.Name TH.Name)
 refreshPat p = runWriterT (f p) where
     f p@(TH.LitP _) = return p
     f   (TH.VarP v) = do
-        v' <- lift $ refreshName v
+        v' <- refreshName v
         writer (TH.VarP v', M.singleton v v')
     f   (TH.TupP ps) = TH.TupP <$> mapM f ps
     f   (TH.UnboxedTupP ps) = TH.UnboxedTupP <$> mapM f ps
@@ -45,7 +57,7 @@ refreshPat p = runWriterT (f p) where
     f   (TH.TildeP p) = TH.TildeP <$> f p
     f   (TH.BangP p) = TH.BangP <$> f p
     f   (TH.AsP v p) = do
-        v' <- lift $ refreshName v
+        v' <- refreshName v
         p' <- f p
         writer (TH.AsP v' p', M.singleton v v')
     f p@(TH.WildP) = return p
@@ -55,10 +67,20 @@ refreshPat p = runWriterT (f p) where
     f   (TH.ViewP e p) = TH.ViewP e <$> f p
 
 simpleStmt SNop = True
-simpleStmt (SRet (VCall _ _)) = True
+simpleStmt (SRet _) = True
 simpleStmt _ = False
 
-cutBlocksStmt :: (THS.Quasi m, MonadState FunMap (t m), MonadTrans t) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> t m Stmt
+-- Sorta-kinda CPS transformation
+
+-- TODO: fix free vars handling
+
+makeCont fv n s = do
+    let vs = S.toList $ freeVarsStmt s `S.difference` fv
+    n' <- refreshName n
+    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s)
+    return $ SRet (VCall n' (TH.TupE $ map TH.VarE vs))
+
+cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> m Stmt
 cutBlocksStmt fv n SNop s' = return s'
 cutBlocksStmt fv n (SRet vs) s' = return $ SRet vs
 cutBlocksStmt fv n (SBlock []) s' = return s'
@@ -66,31 +88,36 @@ cutBlocksStmt fv n (SBlock [s]) s' = cutBlocksStmt fv n s s'
 cutBlocksStmt fv n (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt fv n (SBlock ss) s'
     cutBlocksStmt fv n s s''
-cutBlocksStmt fv n (SEmit e) s' | simpleStmt s' =
+cutBlocksStmt fv n (SEmit e) s' | simpleStmt s' = 
     return $ SBlock [SEmit e, s']
-cutBlocksStmt fv n (SIf e st sf) s' | simpleStmt s' =
+cutBlocksStmt fv n (SIf e st sf) s' | simpleStmt s' = 
     SIf e <$> cutBlocksStmt fv n st s' <*> cutBlocksStmt fv n sf s'
-cutBlocksStmt fv n (SCase e cs) s' | simpleStmt s' =
+cutBlocksStmt fv n (SCase e cs) s' | simpleStmt s' = 
     SCase e <$> mapM cf cs where
         cf (p, s) = do
             (p', su) <- refreshPat p
             (p',) <$> cutBlocksStmt fv n (renameStmt su s) s'
-cutBlocksStmt fv n (SLet ln vs@(VExp e) s) s' | simpleStmt s' = do
+cutBlocksStmt fv n (SLet ln vs@(VExp _) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
     SLet ln' vs <$> cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
+cutBlocksStmt fv n (SLet ln vs@(VCall _ _) s) s' = do
+    ln' <- refreshName ln
+    s'' <- cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
+    s''' <- makeCont fv n s''
+    return $ SLet ln' vs s'''
 cutBlocksStmt fv n s s' = do
-    let vs = S.toList $ freeVarsStmt s' `S.difference` fv
-    n' <- refreshName n
-    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s')
-    cutBlocksStmt fv n s (SRet (VCall n' (TH.TupE $ map TH.VarE vs)))
+    s'' <- makeCont fv n s'
+    cutBlocksStmt fv n s s''
 
-cutBlocks :: THS.Quasi m => NProg -> m NProg
-cutBlocks (NProg is fs f1 e1) = do
+cutBlocks :: MonadRefresh m => NProg -> m NProg
+cutBlocks (NProg is fs f1 e1 cs) = do
     let fvs = freeVarsStmt $ SFun fs SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
-        s' <- cutBlocksStmt fvs n s SNop
+        s' <- cutBlocksStmt fvs n s (SRet (VExp $ TH.TupE []))
         modify $ M.insert n (p, s')
-    return $ NProg is fs' f1 e1
+    return $ NProg is fs' f1 e1 cs
+
+-- Eliminate epsilon transitions
 
 removeEpsilonStmt fs s@SNop = return s
 removeEpsilonStmt fs s@(SEmit _) = return s
@@ -111,6 +138,85 @@ removeEpsilonFrom fs f = do
     where Just (p, s) = M.lookup f fs
 
 removeEpsilon :: NProg -> NProg
-removeEpsilon (NProg is fs f1 e1) = NProg is fs' f1 e1
+removeEpsilon (NProg is fs f1 e1 cs) = NProg is fs' f1 e1 cs
     where fs' = flip execState M.empty $ removeEpsilonFrom fs f1
+
+-- Call graph calculation
+
+data CGEdge = CGEdge {
+    cgEdgeSrc :: TH.Name,
+    cgEdgeDst :: TH.Name,
+    cgEdgeTail :: Bool
+}
+
+type CG = [CGEdge]
+
+callGraph :: FunMap -> CG
+callGraph fs = M.toList fs >>= \(n, (_, s)) -> callGraphStmt n s
+
+callGraphStmt :: TH.Name -> Stmt -> CG
+callGraphStmt n SNop = mzero
+callGraphStmt n (SEmit _) = mzero
+callGraphStmt n (SVar _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
+callGraphStmt n (SLet _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
+callGraphStmt n (SAssign _ _) = mzero
+callGraphStmt n (SRet vs) = callGraphVStmt n True vs
+callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
+callGraphStmt n (SIf _ st sf) = callGraphStmt n st `mplus` callGraphStmt n sf
+callGraphStmt n (SCase _ cs) = callGraphStmt n =<< map snd cs
+
+callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
+callGraphVStmt n t (VExp _) = mzero
+callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
+
+-- Returning functions calculation
+
+returningFuns :: FunMap -> S.Set TH.Name
+returningFuns fs = saturateSet (flip (M.findWithDefault S.empty) tailCalled) directRet
+    where
+    directRet = S.fromList [n | (n, (_, s)) <- M.toList fs, isReturningStmt s ]
+    tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail $ callGraph fs
+
+isReturningStmt :: Stmt -> Bool
+isReturningStmt SNop = False
+isReturningStmt (SEmit _) = False
+isReturningStmt (SVar _ _ s) = isReturningStmt s
+isReturningStmt (SLet _ _ s) = isReturningStmt s
+isReturningStmt (SAssign _ _) = False
+isReturningStmt (SBlock ss) = or $ isReturningStmt <$> ss
+isReturningStmt (SIf _ st sf) = isReturningStmt st || isReturningStmt sf
+isReturningStmt (SCase _ cs) = or $ isReturningStmt <$> map snd cs
+isReturningStmt (SRet (VExp _)) = True
+isReturningStmt (SRet (VCall _ _)) = False
+
+saturateSet :: Ord k => (k -> S.Set k) -> S.Set k -> S.Set k
+saturateSet m s = g s S.empty where
+    g s = foldr (.) id (map f (S.toList s))
+    f n s | n `S.member` s = s
+          | otherwise = g (m n) (S.insert n s)
+
+-- Convert calls to returning functions to non-tail calls
+
+deTailCall :: MonadRefresh m => NProg -> m NProg
+deTailCall (NProg is fs f1 e1 cs) = do
+    fs' <- mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) fs
+    return $ NProg is fs' f1 e1 cs
+    where
+    rf = returningFuns fs
+
+deTailCallStmt :: MonadRefresh m => S.Set TH.Name -> Stmt -> m Stmt
+deTailCallStmt rf s@(SNop) = return s
+deTailCallStmt rf s@(SEmit _) = return s
+deTailCallStmt rf   (SVar n e s) = SVar n e <$> deTailCallStmt rf s
+deTailCallStmt rf   (SLet n e s) = SLet n e <$> deTailCallStmt rf s
+deTailCallStmt rf s@(SAssign _ _) = return s
+deTailCallStmt rf   (SBlock ss) = SBlock <$> mapM (deTailCallStmt rf) ss
+deTailCallStmt rf   (SIf e st sf) = SIf e <$> deTailCallStmt rf st <*> deTailCallStmt rf sf
+deTailCallStmt rf   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) cs
+deTailCallStmt rf s@(SRet (VExp _)) = return s
+deTailCallStmt rf s@(SRet (VCall f e))
+    | f `S.member` rf = do
+        n <- refreshName f
+        return $ SLet n (VCall f e) (SRet (VExp $ TH.VarE n))
+    | otherwise = return s
 

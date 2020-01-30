@@ -24,6 +24,7 @@ data FSM = FSM {
     fsmStates :: M.Map TH.Name FSMState,
     fsmInputs :: TH.Pat,
     fsmInitState :: TH.Name,
-    fsmInitStateParam :: TH.Exp
+    fsmInitStateParam :: TH.Exp,
+    fsmConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 }
 
