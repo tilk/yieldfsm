@@ -22,7 +22,9 @@ mkFSM str
         TH.runIO $ putDoc $ prettyNProg np0
         np' <- deTailCall np0
         TH.runIO $ putDoc $ prettyNProg np'
-        let np'' = removeEpsilon np'
+        np'1 <- makeTailCalls np'
+        TH.runIO $ putDoc $ prettyNProg np'1
+        let np'' = removeEpsilon np'1
         TH.runIO $ putDoc $ prettyNProg np''
         compileFSM "fsm" (nprog2desc np'')
     | Failure e <- pr = do

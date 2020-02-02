@@ -1,14 +1,16 @@
-{-# LANGUAGE TemplateHaskell, TupleSections #-}
+{-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies #-}
 module FSMLangProcess where
 
 import FSMLang
 import FSMFreeVars
 import Prelude
+import Control.Arrow
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Lens
+import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
@@ -27,19 +29,57 @@ lambdaLift (SSeq s1 s2) = SSeq <$> lambdaLift s1 <*> lambdaLift s2
 lambdaLift s = return s
 -}
 
+-- Unique generator
+
+newtype UniqueT m a = UniqueT (StateT Integer m a)
+    deriving newtype (Functor, Applicative, Monad, MonadTrans)
+
+class Monad m => MonadUnique m where
+    fresh :: m Integer
+
+instance Monad m => MonadUnique (UniqueT m) where
+    fresh = UniqueT $ do
+                n <- get
+                put (succ n)
+                return n
+
+instance (Monoid s, MonadUnique m) => MonadUnique (WriterT s m) where
+    fresh = lift fresh
+
+instance MonadUnique m => MonadUnique (StateT s m) where
+    fresh = lift fresh
+
+instance MonadUnique m => MonadUnique (ReaderT s m) where
+    fresh = lift fresh
+
+evalUniqueT (UniqueT s) = evalStateT s 0
+
 -- Name refreshing
 
 class Monad m => MonadRefresh m where
-    refreshName :: TH.Name -> m TH.Name
+    makeName :: String -> m TH.Name
 
 instance MonadRefresh TH.Q where
-    refreshName n = TH.newName $ TH.nameBase n
+    makeName = TH.newName 
 
 instance (Monoid s, MonadRefresh m) => MonadRefresh (WriterT s m) where
-    refreshName = lift . refreshName
+    makeName = lift . makeName
 
 instance MonadRefresh m => MonadRefresh (StateT s m) where
-    refreshName = lift . refreshName
+    makeName = lift . makeName
+
+instance MonadRefresh m => MonadRefresh (ReaderT s m) where
+    makeName = lift . makeName
+
+instance MonadRefresh m => MonadRefresh (UniqueT m) where
+    makeName = lift . makeName
+
+makeSeqName n = do
+    a <- fresh
+    makeName $ n ++ show a
+
+refreshName n = makeName $ TH.nameBase n
+refreshNameWithPrefix p n = makeName $ p ++ TH.nameBase n
 
 refreshPat :: MonadRefresh m => TH.Pat -> m (TH.Pat, M.Map TH.Name TH.Name)
 refreshPat p = runWriterT (f p) where
@@ -74,46 +114,54 @@ simpleStmt _ = False
 
 -- TODO: fix free vars handling
 
-makeCont fv n s = do
+data CBData = CBData {
+    cbDataFreeVars :: S.Set TH.Name,
+    cbDataName :: TH.Name
+}
+
+$(makeLenses ''CBData)
+
+makeCont s = do
+    CBData fv n <- ask
     let vs = S.toList $ freeVarsStmt s `S.difference` fv
     n' <- refreshName n
     modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (TH.TupE $ map TH.VarE vs))
 
-cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m) => S.Set TH.Name -> TH.Name -> Stmt -> Stmt -> m Stmt
-cutBlocksStmt fv n SNop s' = return s'
-cutBlocksStmt fv n (SRet vs) s' = return $ SRet vs
-cutBlocksStmt fv n (SBlock []) s' = return s'
-cutBlocksStmt fv n (SBlock [s]) s' = cutBlocksStmt fv n s s'
-cutBlocksStmt fv n (SBlock (s:ss)) s' = do
-    s'' <- cutBlocksStmt fv n (SBlock ss) s'
-    cutBlocksStmt fv n s s''
-cutBlocksStmt fv n (SEmit e) s' | simpleStmt s' = 
+cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader CBData m) => Stmt -> Stmt -> m Stmt
+cutBlocksStmt SNop s' = return s'
+cutBlocksStmt (SRet vs) s' = return $ SRet vs
+cutBlocksStmt (SBlock []) s' = return s'
+cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
+cutBlocksStmt (SBlock (s:ss)) s' = do
+    s'' <- cutBlocksStmt (SBlock ss) s'
+    cutBlocksStmt s s''
+cutBlocksStmt (SEmit e) s' | simpleStmt s' = 
     return $ SBlock [SEmit e, s']
-cutBlocksStmt fv n (SIf e st sf) s' | simpleStmt s' = 
-    SIf e <$> cutBlocksStmt fv n st s' <*> cutBlocksStmt fv n sf s'
-cutBlocksStmt fv n (SCase e cs) s' | simpleStmt s' = 
+cutBlocksStmt (SIf e st sf) s' | simpleStmt s' = 
+    SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
+cutBlocksStmt (SCase e cs) s' | simpleStmt s' = 
     SCase e <$> mapM cf cs where
         cf (p, s) = do
             (p', su) <- refreshPat p
-            (p',) <$> cutBlocksStmt fv n (renameStmt su s) s'
-cutBlocksStmt fv n (SLet ln vs@(VExp _) s) s' | simpleStmt s' = do
+            (p',) <$> cutBlocksStmt (renameStmt su s) s'
+cutBlocksStmt (SLet ln vs@(VExp _) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
-    SLet ln' vs <$> cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
-cutBlocksStmt fv n (SLet ln vs@(VCall _ _) s) s' = do
+    SLet ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+cutBlocksStmt (SLet ln vs@(VCall _ _) s) s' = do
     ln' <- refreshName ln
-    s'' <- cutBlocksStmt fv n (renameStmt (M.singleton ln ln') s) s'
-    s''' <- makeCont fv n s''
+    s'' <- cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+    s''' <- makeCont s''
     return $ SLet ln' vs s'''
-cutBlocksStmt fv n s s' = do
-    s'' <- makeCont fv n s'
-    cutBlocksStmt fv n s s''
+cutBlocksStmt s s' = do
+    s'' <- makeCont s'
+    cutBlocksStmt s s''
 
 cutBlocks :: MonadRefresh m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1 cs) = do
     let fvs = freeVarsStmt $ SFun fs SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
-        s' <- cutBlocksStmt fvs n s (SRet (VExp $ TH.TupE []))
+        s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ TH.TupE []))
         modify $ M.insert n (p, s')
     return $ NProg is fs' f1 e1 cs
 
@@ -219,4 +267,94 @@ deTailCallStmt rf s@(SRet (VCall f e))
         n <- refreshName f
         return $ SLet n (VCall f e) (SRet (VExp $ TH.VarE n))
     | otherwise = return s
+
+-- Converting to tail calls
+
+data TCData = TCData {
+    tcDataCont :: TH.Name,
+    tcDataType :: TH.Name,
+    tcDataApply :: TH.Name,
+    tcDataFreeVars :: S.Set TH.Name,
+    tcDataName :: TH.Name
+}
+
+data ContData = ContData {
+    contDataConName :: TH.Name,
+    contDataCaller :: TH.Name,
+    contDataCalled :: TH.Name,
+    contDataResName :: TH.Name,
+    contDataVars :: [TH.Name],
+    contDataExp :: TH.Exp,
+    contDataTgt :: ContTgt
+}
+
+data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
+
+makeTailCallsStmt :: (MonadRefresh m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
+makeTailCallsStmt   (SLet n (VCall f e) (SRet (VExp e'))) = do
+    TCData cfn _ an fvs fn <- ask
+    let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
+    cn <- refreshNameWithPrefix "C" f
+    tell [ContData cn fn f n vs e' (ContTgtCont an)]
+    return $ SRet (VCall f (TH.TupE [e, TH.AppE (TH.ConE cn) (TH.TupE $ map TH.VarE $ cfn : vs)]))
+makeTailCallsStmt   (SLet n (VCall f e) (SRet (VCall f' e'))) = do
+    TCData _ _ _ fvs fn <- ask
+    let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
+    cn <- refreshNameWithPrefix "C" f
+    tell [ContData cn fn f n vs e' (ContTgtFun f')]
+    return $ SRet (VCall f (TH.TupE [e, TH.AppE (TH.ConE cn) (TH.TupE $ map TH.VarE vs)]))
+makeTailCallsStmt   (SLet n (VExp e) s) = SLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
+makeTailCallsStmt   (SIf e st sf) = SIf e <$> makeTailCallsStmt st <*> makeTailCallsStmt sf
+makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTailCallsStmt s) cs
+makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> TH.TupE [e, TH.VarE cfn]) <$> asks tcDataCont))
+makeTailCallsStmt s@(SRet (VCall _ _)) = return s
+makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
+
+makeTailCalls :: MonadRefresh m => NProg -> m NProg
+makeTailCalls (NProg is fs f1 e1 cs) = do
+    let fvs = freeVarsStmt $ SFun fs SNop
+    (fsd, cds) <- runWriterT $ forM (M.toList fs) $ \(n, (p, s)) -> do
+        if n `S.member` rfs
+        then do
+            cfn <- makeName "c"
+            ctn <- refreshNameWithPrefix "CT" n
+            an <- refreshNameWithPrefix "ap" n
+            s' <- flip runReaderT (TCData cfn ctn an fvs n) $ makeTailCallsStmt s
+            return $ (Just (ctn, an), (n, (TH.TupP [p, TH.VarP cfn], s')))
+        else do
+            s' <- flip runReaderT (TCData (error "cfn") (error "ctn") (error "an") fvs n) $ makeTailCallsStmt s
+            return $ (Nothing, (n, (p, s')))
+    let cdmap = M.fromListWith (++) $ map (contDataCalled &&& return) cds
+    let rfsd = map (fromJust *** id) . filter (isJust . fst) $ fsd
+    apfs <- mapM (apf cdmap) rfsd
+    cdefs <- mapM (cdef cdmap) rfsd
+    let fs' = M.fromList $ apfs ++ map snd fsd
+    return $ NProg is fs' f1 e1 (M.unions cdefs `M.union` cs)
+    where
+    rfs = returningFuns fs
+    apf cdmap ((ctn, an), (n, (p, s))) 
+        | Just cds <- M.lookup n cdmap = do
+            rn <- makeName "r"
+            cfn <- makeName "c"
+            cs <- forM cds $ \cd -> case contDataTgt cd of
+                ContTgtFun fn ->
+                    return (TH.ConP (contDataConName cd) [TH.TupP $ map TH.VarP $ contDataVars cd],
+                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall fn (contDataExp cd)))
+                ContTgtCont rap -> do
+                    rcn <- makeName "rc"
+                    return (TH.ConP (contDataConName cd) [TH.TupP $ map TH.VarP $ rcn : contDataVars cd],
+                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (TH.TupE [contDataExp cd, TH.VarE rcn])))
+            return (an, (TH.TupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
+        | otherwise = return (an, (TH.TupP [], SNop)) -- will be cleaned up anyway
+    cdef cdmap ((ctn, an), (n, _)) 
+        | Just cds <- M.lookup n cdmap = do
+            cons <- forM cds $ \cd -> case contDataTgt cd of
+                ContTgtFun _ ->
+                    return (contDataConName cd, contDataVars cd)
+                ContTgtCont _ -> do
+                    rcn <- makeName "rc"
+                    return (contDataConName cd, rcn : contDataVars cd)
+            return $ M.singleton ctn $ M.fromList cons
+        | otherwise = return $ M.empty
+        
 
