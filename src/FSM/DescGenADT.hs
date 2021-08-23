@@ -9,7 +9,7 @@ import Prelude
 import Data.List
 import Data.Maybe(fromJust)
 import GHC.Generics(Generic)
-import Clash.Prelude(NFDataX, BitPack)
+import Clash.Prelude(NFDataX, BitPack, mealy)
 
 conName cn = fromJust . flip M.lookup cn
 
@@ -41,8 +41,9 @@ makeConNames = fst . foldl' f (M.empty, M.empty) where
 
 derivclause = TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT ''NFDataX]
 
-compileFSM :: String -> FSM -> TH.Q [TH.Dec]
-compileFSM nm fsm = do
+compileFSM :: FSM -> TH.Q [TH.Dec]
+compileFSM fsm = do
+    let nm = TH.nameBase $ fsmName fsm
     let cn = makeConNames (M.keys $ fsmStates fsm)
     initStateName <- TH.newName ("fsmInitState_" ++ nm)
     stateName <- TH.newName ("FSMState_" ++ nm)
@@ -59,7 +60,11 @@ compileFSM nm fsm = do
         let contTvars = map TH.PlainTV $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
     return (TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
-            TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [] :
-            TH.FunD funcName funcClauses : contDecls)
+            TH.SigD (fsmName fsm) (fsmType fsm) :
+            TH.ValD (TH.VarP $ fsmName fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) [
+                TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [],
+                TH.FunD funcName funcClauses
+            ] :
+            contDecls)
 
 

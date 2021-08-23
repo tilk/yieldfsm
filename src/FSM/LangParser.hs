@@ -23,10 +23,12 @@ ssymbol s = (try $ whiteSpace *> symbol s) <?> s
 
 stringToHsExp s = HM.toExp <$> HM.parseHsExp s
 stringToHsPat s = HM.toPat <$> HM.parseHsPat s
+stringToHsType s = HM.toType <$> HM.parseHsType s
 parseToEOL :: ([Char] -> Either String a) -> Parser a
 parseToEOL p = e2m . p =<< manyTill anyChar newlineOrEof
 parseHsExpToEOL = parseToEOL stringToHsExp
 parseHsPatToEOL = parseToEOL stringToHsPat
+parseHsTypeToEOL = parseToEOL stringToHsType
 
 idStyle = haskellIdents { _styleReserved = HS.fromList ["nop", "var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
 
@@ -107,6 +109,8 @@ parseVStmt :: Parser VStmt
 parseVStmt = parseVCall
          <|> parseVExp
 
-parseProg = Prog <$> (runUnlined (ssymbol "inputs") *> parseHsPatToEOL)
+parseProg = Prog <$> (runUnlined parseName <* ssymbol "::")
+                 <*> parseHsTypeToEOL
+                 <*> (runUnlined (ssymbol "inputs") *> parseHsPatToEOL)
                  <*> parseBasicStmt
 

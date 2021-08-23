@@ -23,11 +23,15 @@ data Stmt = SVar TH.Name VStmt Stmt
     deriving Show
 
 data Prog = Prog {
+    progName :: TH.Name,
+    progType :: TH.Type,
     progInputs :: TH.Pat,
     progBody :: Stmt
 } deriving Show
 
 data NProg = NProg {
+    nProgName :: TH.Name,
+    nProgType :: TH.Type,
     nProgInputs :: TH.Pat,
     nProgFuns :: FunMap,
     nProgInit :: TH.Name,
@@ -36,7 +40,7 @@ data NProg = NProg {
 } deriving Show
 
 toNProg :: Prog -> Maybe NProg
-toNProg (Prog is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg is fs f1 e1 M.empty)
+toNProg (Prog n t is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg n t is fs f1 e1 M.empty)
 toNProg _ = Nothing
 
 sBlock :: [Stmt] -> Stmt

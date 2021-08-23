@@ -1,4 +1,3 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
 import Prelude
 import qualified Clash.Prelude as CP
 import Test.Tasty
@@ -11,13 +10,12 @@ import FSM
 main :: IO ()
 main = defaultMain $ testGroup "."
   [ 
-    TU.testCase "upcount" $ CP.simulateN @CP.System 100 myFsm (repeat ()) TU.@?= [(0 :: Integer)..99]
+    TU.testCase "upcount" $ CP.simulateN @CP.System 100 seqFSM (repeat ()) TU.@?= [(0 :: Integer)..99]
 --    TH.testProperty "upcount" $ H.property $ 1 H.=== 1
   ]
 
-myFsm = CP.mealy fsmFunc_fsm fsmInitState_fsm
-
-[fsm|inputs ()
+[fsm|seqFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom () -> CP.Signal dom Integer
+inputs ()
 fun f i
     begin
         emit i
