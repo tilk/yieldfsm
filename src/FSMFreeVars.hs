@@ -32,8 +32,8 @@ freeVarsExp (TH.UInfixE e1 e e2) = freeVarsExp e `S.union` freeVarsExp e1 `S.uni
 freeVarsExp (TH.ParensE e) = freeVarsExp e
 freeVarsExp (TH.LamE ps e) = freeVarsExp e `underPat` patUnions (map freeVarsPat ps)
 freeVarsExp (TH.LamCaseE ms) = S.unions $ map freeVarsMatch ms
-freeVarsExp (TH.TupE es) = S.unions $ map freeVarsExp es
-freeVarsExp (TH.UnboxedTupE es) = S.unions $ map freeVarsExp es
+freeVarsExp (TH.TupE es) = S.unions $ map freeVarsExpMaybe es
+freeVarsExp (TH.UnboxedTupE es) = S.unions $ map freeVarsExpMaybe es
 freeVarsExp (TH.UnboxedSumE e _ _) = freeVarsExp e
 freeVarsExp (TH.CondE e e1 e2) = freeVarsExp e `S.union` freeVarsExp e1 `S.union` freeVarsExp e2
 -- MultiIfE

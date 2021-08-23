@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies #-}
+{-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies, FlexibleContexts #-}
 module FSMLangProcess where
 
 import FSMLang
@@ -131,12 +131,14 @@ data CBData = CBData {
 
 $(makeLenses ''CBData)
 
+tupE = TH.TupE . map Just
+
 makeCont s = do
     CBData fv n <- ask
     let vs = S.toList $ freeVarsStmt s `S.difference` fv
     n' <- refreshName n
     modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s)
-    return $ SRet (VCall n' (TH.TupE $ map TH.VarE vs))
+    return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
 cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader CBData m) => Stmt -> Stmt -> m Stmt
 cutBlocksStmt SNop s' = return s'
@@ -306,17 +308,17 @@ makeTailCallsStmt   (SLet n (VCall f e) (SRet (VExp e'))) = do
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
     cn <- refreshNameWithPrefix "C" f
     tell [ContData cn fn f n vs e' (ContTgtCont an)]
-    return $ SRet (VCall f (TH.TupE [e, TH.AppE (TH.ConE cn) (TH.TupE $ map TH.VarE $ cfn : vs)]))
+    return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
 makeTailCallsStmt   (SLet n (VCall f e) (SRet (VCall f' e'))) = do
     TCData _ _ _ fvs fn <- ask
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
     cn <- refreshNameWithPrefix "C" f
     tell [ContData cn fn f n vs e' (ContTgtFun f')]
-    return $ SRet (VCall f (TH.TupE [e, TH.AppE (TH.ConE cn) (TH.TupE $ map TH.VarE vs)]))
+    return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
 makeTailCallsStmt   (SLet n (VExp e) s) = SLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
 makeTailCallsStmt   (SIf e st sf) = SIf e <$> makeTailCallsStmt st <*> makeTailCallsStmt sf
 makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTailCallsStmt s) cs
-makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> TH.TupE [e, TH.VarE cfn]) <$> asks tcDataCont))
+makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> asks tcDataCont))
 makeTailCallsStmt s@(SRet (VCall _ _)) = return s
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
 
@@ -353,7 +355,7 @@ makeTailCalls (NProg is fs f1 e1 cs) = do
                 ContTgtCont rap -> do
                     rcn <- makeName "rc"
                     return (TH.ConP (contDataConName cd) [TH.TupP $ map TH.VarP $ rcn : contDataVars cd],
-                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (TH.TupE [contDataExp cd, TH.VarE rcn])))
+                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
             return (an, (TH.TupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
         | otherwise = return (an, (TH.TupP [], SNop)) -- will be cleaned up anyway
     cdef cdmap ((ctn, an), (n, _)) 
