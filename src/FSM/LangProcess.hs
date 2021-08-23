@@ -131,13 +131,17 @@ data CBData = CBData {
 
 $(makeLenses ''CBData)
 
-tupE = TH.TupE . map Just
+tupE [x] = x
+tupE xs = TH.TupE . map Just $ xs
+
+tupP [x] = x
+tupP xs = TH.TupP xs
 
 makeCont s = do
     CBData fv n <- ask
     let vs = S.toList $ freeVarsStmt s `S.difference` fv
     n' <- refreshName n
-    modify $ M.insert n' (TH.TupP $ map TH.VarP vs, s)
+    modify $ M.insert n' (tupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
 cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader CBData m) => Stmt -> Stmt -> m Stmt
@@ -173,7 +177,7 @@ cutBlocks :: MonadRefresh m => NProg -> m NProg
 cutBlocks (NProg is fs f1 e1 cs) = do
     let fvs = freeVarsStmt $ SFun fs SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
-        s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ TH.TupE []))
+        s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
     return $ NProg is fs' f1 e1 cs
 
@@ -332,7 +336,7 @@ makeTailCalls (NProg is fs f1 e1 cs) = do
             ctn <- refreshNameWithPrefix "CT" n
             an <- refreshNameWithPrefix "ap" n
             s' <- flip runReaderT (TCData cfn ctn an fvs n) $ makeTailCallsStmt s
-            return $ (Just (ctn, an), (n, (TH.TupP [p, TH.VarP cfn], s')))
+            return $ (Just (ctn, an), (n, (tupP [p, TH.VarP cfn], s')))
         else do
             s' <- flip runReaderT (TCData (error "cfn") (error "ctn") (error "an") fvs n) $ makeTailCallsStmt s
             return $ (Nothing, (n, (p, s')))
@@ -350,14 +354,14 @@ makeTailCalls (NProg is fs f1 e1 cs) = do
             cfn <- makeName "c"
             cs <- forM cds $ \cd -> case contDataTgt cd of
                 ContTgtFun fn ->
-                    return (TH.ConP (contDataConName cd) [TH.TupP $ map TH.VarP $ contDataVars cd],
+                    return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ contDataVars cd],
                         SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall fn (contDataExp cd)))
                 ContTgtCont rap -> do
                     rcn <- makeName "rc"
-                    return (TH.ConP (contDataConName cd) [TH.TupP $ map TH.VarP $ rcn : contDataVars cd],
+                    return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ rcn : contDataVars cd],
                         SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
-            return (an, (TH.TupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
-        | otherwise = return (an, (TH.TupP [], SNop)) -- will be cleaned up anyway
+            return (an, (tupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
+        | otherwise = return (an, (tupP [], SNop)) -- will be cleaned up anyway
     cdef cdmap ((ctn, an), (n, _)) 
         | Just cds <- M.lookup n cdmap = do
             cons <- forM cds $ \cd -> case contDataTgt cd of
