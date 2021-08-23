@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TupleSections #-}
-module FSMDescGenADT where
+module FSM.DescGenADT where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 import Control.Monad
-import FSMDesc
+import FSM.Desc
 import Prelude
 import Data.List
 import Data.Maybe(fromJust)

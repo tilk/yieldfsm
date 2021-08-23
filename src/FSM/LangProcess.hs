@@ -1,8 +1,8 @@
 {-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies, FlexibleContexts #-}
-module FSMLangProcess where
+module FSM.LangProcess where
 
-import FSMLang
-import FSMFreeVars
+import FSM.Lang
+import FSM.FreeVars
 import Prelude
 import Control.Arrow
 import Control.Monad

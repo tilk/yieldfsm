@@ -1,10 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
-module FSMLang2Desc where
+module FSM.Lang2Desc where
 
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
-import FSMLang
-import FSMDesc
+import FSM.Lang
+import FSM.Desc
 import Prelude
 import Control.Arrow
 

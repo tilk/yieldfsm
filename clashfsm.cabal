@@ -88,14 +88,14 @@ library
   hs-source-dirs: src
   exposed-modules:
     FSM,
-    FSMDesc,
-    FSMDescGenADT,
-    FSMFreeVars,
-    FSMLang,
-    FSMLang2Desc,
-    FSMLangParser,
-    FSMLangPretty,
-    FSMLangProcess
+    FSM.Desc,
+    FSM.DescGenADT,
+    FSM.FreeVars,
+    FSM.Lang,
+    FSM.Lang2Desc,
+    FSM.LangParser,
+    FSM.LangPretty,
+    FSM.LangProcess
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with clashfsm project in scope

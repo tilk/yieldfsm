@@ -1,10 +1,10 @@
 {-# LANGUAGE TupleSections #-}
-module FSMLangParser where
+module FSM.LangParser where
 
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Quote as THQ
 import qualified Language.Haskell.Meta as HM
-import FSMLang
+import FSM.Lang
 import Text.Trifecta
 import Text.Parser.Token.Style
 import Control.Applicative

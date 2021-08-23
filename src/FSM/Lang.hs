@@ -1,4 +1,4 @@
-module FSMLang where
+module FSM.Lang where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M

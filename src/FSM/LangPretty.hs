@@ -1,6 +1,6 @@
-module FSMLangPretty where
+module FSM.LangPretty where
 
-import FSMLang
+import FSM.Lang
 import Prelude
 import Data.Text.Prettyprint.Doc
 import qualified Language.Haskell.TH as TH

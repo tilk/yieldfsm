@@ -1,11 +1,11 @@
-module FSMFreeVars where
+module FSM.FreeVars where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Prelude
 import Data.Maybe(maybe)
-import FSMLang
+import FSM.Lang
 
 data PatFV = PatFV (S.Set TH.Name) (S.Set TH.Name)
 

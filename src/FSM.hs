@@ -1,11 +1,11 @@
 module FSM where
 
-import FSMLang
-import FSMLangParser
-import FSMLangPretty
-import FSMLang2Desc
-import FSMDescGenADT
-import FSMLangProcess
+import FSM.Lang
+import FSM.LangParser
+import FSM.LangPretty
+import FSM.Lang2Desc
+import FSM.DescGenADT
+import FSM.LangProcess
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Quote as THQ
 import Control.Monad.State

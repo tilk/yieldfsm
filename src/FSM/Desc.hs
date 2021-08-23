@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module FSMDesc where
+module FSM.Desc where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
