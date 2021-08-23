@@ -25,9 +25,19 @@ data LifterState = LifterState {
 
 $(makeLenses ''LifterState)
 
-lambdaLift (SSeq s1 s2) = SSeq <$> lambdaLift s1 <*> lambdaLift s2
-lambdaLift s = return s
 -}
+
+lambdaLiftStmt   (SLet ln vs s) = SLet ln <$> lambdaLiftVStmt vs <*> lambdaLiftStmt s
+lambdaLiftStmt s@(SEmit _) = return s
+lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
+lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
+lambdaLiftStmt   (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
+lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLiftStmt s) cs
+lambdaLiftStmt s@(SNop) = return s
+lambdaLiftStmt   (SFun fm s) = lambdaLiftStmt s -- TODO function env and state
+
+lambdaLiftVStmt vs@(VExp _) = return vs
+lambdaLiftVStmt    (VCall n e) = undefined
 
 -- Unique generator
 
