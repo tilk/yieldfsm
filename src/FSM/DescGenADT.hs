@@ -33,10 +33,10 @@ compilePat (TH.TupP ts) = do
     rs <- mapM compilePat ts
     return (fst =<< rs, foldl TH.AppT (TH.TupleT $ length rs) $ map snd rs)
 
-makeConNames :: [TH.Name] -> M.Map TH.Name TH.Name
-makeConNames = fst . foldl' f (M.empty, M.empty) where
-    f (cn, d) n | Just k <- M.lookup s d = (M.insert n (TH.mkName $ "C" ++ s ++ show k) cn, M.insert s (k+1) d)
-                | otherwise = (M.insert n (TH.mkName $ "C" ++ s) cn, M.insert s 0 d)
+makeConNames :: String -> [TH.Name] -> M.Map TH.Name TH.Name
+makeConNames nm = fst . foldl' f (M.empty, M.empty) where
+    f (cn, d) n | Just k <- M.lookup s d = (M.insert n (TH.mkName $ "C" ++ s ++ "_" ++ nm ++ show k) cn, M.insert s (k+1) d)
+                | otherwise = (M.insert n (TH.mkName $ "C" ++ s ++ "_" ++ nm) cn, M.insert s 0 d)
         where s = TH.nameBase n
 
 derivclause = TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT ''NFDataX]
@@ -44,7 +44,7 @@ derivclause = TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT
 compileFSM :: FSM -> TH.Q [TH.Dec]
 compileFSM fsm = do
     let nm = TH.nameBase $ fsmName fsm
-    let cn = makeConNames (M.keys $ fsmStates fsm)
+    let cn = makeConNames nm (M.keys $ fsmStates fsm)
     initStateName <- TH.newName ("fsmInitState_" ++ nm)
     stateName <- TH.newName ("FSMState_" ++ nm)
     funcName <- TH.newName ("fsmFunc_" ++ nm)
@@ -59,12 +59,12 @@ compileFSM fsm = do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' (map ((b,) . TH.VarT) ns)
         let contTvars = map TH.PlainTV $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
-    return (TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
-            TH.SigD (fsmName fsm) (fsmType fsm) :
-            TH.ValD (TH.VarP $ fsmName fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) [
-                TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [],
-                TH.FunD funcName funcClauses
-            ] :
-            contDecls)
+    return [TH.DataD [] stateName tvars Nothing stateCons [derivclause],
+            TH.SigD (fsmName fsm) (fsmType fsm),
+            TH.ValD (TH.VarP $ fsmName fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) (
+                TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [] :
+                TH.FunD funcName funcClauses :
+                contDecls
+            )]
 
 
