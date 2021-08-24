@@ -15,7 +15,7 @@ prettyTH n = pretty $ TH.pprint n
 prettyStmt :: Stmt -> Doc ann
 prettyStmt SNop = prettyKeyword "nop"
 prettyStmt (SVar n e s) = vcat [prettyKeyword "var" <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt e, prettyStmt s]
-prettyStmt (SLet n e s) = vcat [prettyKeyword "var" <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt e, prettyStmt s]
+prettyStmt (SLet n e s) = vcat [prettyKeyword "let" <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt e, prettyStmt s]
 prettyStmt (SAssign n e) = prettyTH n <+> prettyKeyword "=" <+> prettyTH e
 prettyStmt (SEmit e) = prettyKeyword "emit" <+> prettyTH e
 prettyStmt (SRet e) = prettyKeyword "ret" <+> prettyVStmt e
