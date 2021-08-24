@@ -12,6 +12,12 @@ import FSM
 dup [] = []
 dup (x:xs) = x:x:dup xs
 
+countSlowOpt _ [] = []
+countSlowOpt n (False:xs) = n:countSlowOpt (n+1) xs
+countSlowOpt n (True:xs) = n:f n xs where
+    f _ [] = []
+    f n (_:xs) = n:countSlowOpt (n+1) xs
+
 main :: IO ()
 main = defaultMain $ testGroup "."
   [ 
@@ -19,10 +25,19 @@ main = defaultMain $ testGroup "."
     TU.testCase "countLet" $ CP.simulateN @CP.System 100 countLetFSM (repeat ()) TU.@?= [(0 :: Integer)..99],
     TU.testCase "countSlow" $ CP.simulateN @CP.System 100 countSlowFSM (repeat ()) TU.@?= dup [(0 :: Integer)..49],
     TU.testCase "countSlowLet" $ CP.simulateN @CP.System 100 countSlowLetFSM (repeat ()) TU.@?= dup [(0 :: Integer)..49],
-    TH.testProperty "countEn" $ H.property $ do
+    TH.testProperty "countSlowOpt" $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
-        CP.simulateN @CP.System (length l) countEnFSM l H.=== drop 1 (scanl (\a b -> if b then a+1 else a) 0 l),
-    TH.testProperty "countUpDownFSM" $ H.property $ do
+        CP.simulateN @CP.System (length l) countSlowOptFSM l H.=== countSlowOpt 0 l,
+    TH.testProperty "countEnMoore" $ H.property $ do
+        l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
+        CP.simulateN @CP.System (length l) countEnMooreFSM l H.=== take (length l) (scanl (\a b -> if b then a+1 else a) 0 l),
+    TH.testProperty "countEnMoore2" $ H.property $ do
+        l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
+        CP.simulateN @CP.System (length l) countEnMoore2FSM l H.=== take (length l) (scanl (\a b -> if b then a+1 else a) 0 l),
+    TH.testProperty "countEnMealy" $ H.property $ do
+        l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
+        CP.simulateN @CP.System (length l) countEnMealyFSM l H.=== drop 1 (scanl (\a b -> if b then a+1 else a) 0 l),
+    TH.testProperty "countUpDown" $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
         CP.simulateN @CP.System 100 (countUpDownFSM m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
   ]
@@ -71,7 +86,48 @@ fun f i
 ret call f 0
 |]
 
-[fsm|countEnFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countSlowOptFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+inputs b
+fun f i
+  begin
+    if b
+      emit i
+    emit i
+    ret call f (i+1)
+  end
+ret call f 0
+|]
+
+[fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+inputs b
+fun g (i, j)
+    begin
+        emit i
+        ret call f j
+    end
+fun f i
+    if b
+        ret call g (i, (i+1))
+    else
+        ret call g (i, i)
+ret call f 0
+|]
+
+[fsm|countEnMoore2FSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+inputs b
+fun f i
+    let bb = b
+    begin
+        emit i
+        if bb
+            ret call f (i+1)
+        else
+            ret call f i
+    end
+ret call f 0
+|]
+
+[fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
 fun g i
     begin
