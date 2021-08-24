@@ -174,12 +174,12 @@ cutBlocksStmt s s' = do
     cutBlocksStmt s s''
 
 cutBlocks :: MonadRefresh m => NProg -> m NProg
-cutBlocks (NProg n t is fs f1 e1 cs) = do
+cutBlocks (NProg n t ps is fs f1 e1 cs) = do
     let fvs = freeVarsStmt $ SFun fs SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
         s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
-    return $ NProg n t is fs' f1 e1 cs
+    return $ NProg n t ps is fs' f1 e1 cs
 
 -- Eliminate epsilon transitions
 
@@ -202,7 +202,7 @@ removeEpsilonFrom fs f = do
     where Just (p, s) = M.lookup f fs
 
 removeEpsilon :: NProg -> NProg
-removeEpsilon (NProg n t is fs f1 e1 cs) = NProg n t is fs' f1 e1 cs
+removeEpsilon (NProg n t ps is fs f1 e1 cs) = NProg n t ps is fs' f1 e1 cs
     where fs' = flip execState M.empty $ removeEpsilonFrom fs f1
 
 -- Call graph calculation
@@ -262,9 +262,9 @@ saturateSet m s = g s S.empty where
 -- Convert calls to returning functions to non-tail calls
 
 deTailCall :: MonadRefresh m => NProg -> m NProg
-deTailCall (NProg n t is fs f1 e1 cs) = do
+deTailCall (NProg n t ps is fs f1 e1 cs) = do
     fs' <- mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) fs
-    return $ NProg n t is fs' f1 e1 cs
+    return $ NProg n t ps is fs' f1 e1 cs
     where
     rf = returningFuns fs
 
@@ -327,7 +327,7 @@ makeTailCallsStmt s@(SRet (VCall _ _)) = return s
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
-makeTailCalls (NProg n t is fs f1 e1 cs) = do
+makeTailCalls (NProg n t ps is fs f1 e1 cs) = do
     let fvs = freeVarsStmt $ SFun fs SNop
     (fsd, cds) <- runWriterT $ forM (M.toList fs) $ \(n, (p, s)) -> do
         if n `S.member` rfs
@@ -345,7 +345,7 @@ makeTailCalls (NProg n t is fs f1 e1 cs) = do
     apfs <- mapM (apf cdmap) rfsd
     cdefs <- mapM (cdef cdmap) rfsd
     let fs' = M.fromList $ apfs ++ map snd fsd
-    return $ NProg n t is fs' f1 e1 (M.unions cdefs `M.union` cs)
+    return $ NProg n t ps is fs' f1 e1 (M.unions cdefs `M.union` cs)
     where
     rfs = returningFuns fs
     apf cdmap ((ctn, an), (n, (p, s))) 

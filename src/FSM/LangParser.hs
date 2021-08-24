@@ -111,6 +111,7 @@ parseVStmt = parseVCall
 
 parseProg = Prog <$> (runUnlined parseName <* ssymbol "::")
                  <*> parseHsTypeToEOL
+                 <*> many (runUnlined (ssymbol "param") *> parseHsPatToEOL)
                  <*> (runUnlined (ssymbol "inputs") *> parseHsPatToEOL)
                  <*> parseBasicStmt
 

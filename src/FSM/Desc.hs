@@ -23,6 +23,7 @@ data FSMState = FSMState {
 data FSM = FSM {
     fsmName :: TH.Name,
     fsmType :: TH.Type,
+    fsmParams :: [TH.Pat],
     fsmStates :: M.Map TH.Name FSMState,
     fsmInputs :: TH.Pat,
     fsmInitState :: TH.Name,
