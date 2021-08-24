@@ -33,5 +33,6 @@ mkFSM str
     where
     pr = parseString parseProg mempty str
 
+fsm :: THQ.QuasiQuoter
 fsm = THQ.QuasiQuoter undefined undefined undefined mkFSM
 

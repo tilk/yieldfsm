@@ -14,8 +14,7 @@ import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
-import qualified Language.Haskell.TH.Syntax as THS
-import Debug.Trace
+--import qualified Language.Haskell.TH.Syntax as THS
 
 {-
 data LifterState = LifterState {
@@ -27,6 +26,7 @@ $(makeLenses ''LifterState)
 
 -}
 
+lambdaLiftStmt :: Monad f => Stmt -> f Stmt
 lambdaLiftStmt   (SLet ln vs s) = SLet ln <$> lambdaLiftVStmt vs <*> lambdaLiftStmt s
 lambdaLiftStmt s@(SEmit _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
@@ -36,6 +36,7 @@ lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLift
 lambdaLiftStmt s@(SNop) = return s
 lambdaLiftStmt   (SFun fm s) = lambdaLiftStmt s -- TODO function env and state
 
+lambdaLiftVStmt :: Monad m => VStmt -> m VStmt
 lambdaLiftVStmt vs@(VExp _) = return vs
 lambdaLiftVStmt    (VCall n e) = undefined
 
@@ -62,6 +63,7 @@ instance MonadUnique m => MonadUnique (StateT s m) where
 instance MonadUnique m => MonadUnique (ReaderT s m) where
     fresh = lift fresh
 
+evalUniqueT :: Monad m => UniqueT m a -> m a
 evalUniqueT (UniqueT s) = evalStateT s 0
 
 -- Name refreshing
@@ -84,15 +86,19 @@ instance MonadRefresh m => MonadRefresh (ReaderT s m) where
 instance MonadRefresh m => MonadRefresh (UniqueT m) where
     makeName = lift . makeName
 
+makeSeqName :: (MonadUnique m, MonadRefresh m) => String -> m TH.Name
 makeSeqName n = do
     a <- fresh
     makeName $ n ++ show a
 
+refreshName :: MonadRefresh m => TH.Name -> m TH.Name
 refreshName n = makeName $ TH.nameBase n
+
+refreshNameWithPrefix :: MonadRefresh m => String -> TH.Name -> m TH.Name
 refreshNameWithPrefix p n = makeName $ p ++ TH.nameBase n
 
 refreshPat :: MonadRefresh m => TH.Pat -> m (TH.Pat, M.Map TH.Name TH.Name)
-refreshPat p = runWriterT (f p) where
+refreshPat = runWriterT . f where
     f p@(TH.LitP _) = return p
     f   (TH.VarP v) = do
         v' <- refreshName v
@@ -116,6 +122,7 @@ refreshPat p = runWriterT (f p) where
     f   (TH.SigP p t) = TH.SigP <$> f p <*> pure t
     f   (TH.ViewP e p) = TH.ViewP e <$> f p
 
+simpleStmt :: Stmt -> Bool
 simpleStmt SNop = True
 simpleStmt (SRet _) = True
 simpleStmt _ = False
@@ -131,12 +138,15 @@ data CBData = CBData {
 
 $(makeLenses ''CBData)
 
+tupE :: [TH.Exp] -> TH.Exp
 tupE [x] = x
 tupE xs = TH.TupE . map Just $ xs
 
+tupP :: [TH.Pat] -> TH.Pat
 tupP [x] = x
 tupP xs = TH.TupP xs
 
+makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState FunMap m) => Stmt -> m Stmt
 makeCont s = do
     CBData fv n <- ask
     let vs = S.toList $ freeVarsStmt s `S.difference` fv
@@ -145,9 +155,9 @@ makeCont s = do
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
 cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader CBData m) => Stmt -> Stmt -> m Stmt
-cutBlocksStmt SNop s' = return s'
-cutBlocksStmt (SRet vs) s' = return $ SRet vs
-cutBlocksStmt (SBlock []) s' = return s'
+cutBlocksStmt SNop         s' = return s'
+cutBlocksStmt (SRet vs)    _  = return $ SRet vs
+cutBlocksStmt (SBlock [])  s' = return s'
 cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
 cutBlocksStmt (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt (SBlock ss) s'
@@ -174,25 +184,29 @@ cutBlocksStmt s s' = do
     cutBlocksStmt s s''
 
 cutBlocks :: MonadRefresh m => NProg -> m NProg
-cutBlocks (NProg n t ps is fs f1 e1 cs) = do
-    let fvs = freeVarsStmt $ SFun fs SNop
-    fs' <- flip execStateT M.empty $ forM_ (M.toList fs) $ \(n, (p, s)) -> do
+cutBlocks prog = do
+    let fvs = freeVarsStmt $ SFun (nProgFuns prog) SNop
+    fs' <- flip execStateT M.empty $ forM_ (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
-    return $ NProg n t ps is fs' f1 e1 cs
+    return $ prog { nProgFuns = fs' }
 
 -- Eliminate epsilon transitions
 
-removeEpsilonStmt fs s@SNop = return s
-removeEpsilonStmt fs s@(SEmit _) = return s
+removeEpsilonStmt :: MonadState (M.Map TH.Name (TH.Pat, Stmt)) f =>
+                     M.Map TH.Name (TH.Pat, Stmt) -> Stmt -> f Stmt
+removeEpsilonStmt _  s@SNop = return s
+removeEpsilonStmt _  s@(SEmit _) = return s
 removeEpsilonStmt fs   (SIf e st sf) = SIf e <$> removeEpsilonStmt fs st <*> removeEpsilonStmt fs sf
 removeEpsilonStmt fs   (SLet ln vs s) = SLet ln vs <$> removeEpsilonStmt fs s
 removeEpsilonStmt fs   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt fs s
-removeEpsilonStmt fs s@(SBlock [SEmit e,SRet (VCall f e')]) = removeEpsilonFrom fs f >> return s
+removeEpsilonStmt fs s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom fs f >> return s
 removeEpsilonStmt fs   (SRet (VCall f e)) = SCase e <$> (return . (p,) <$> removeEpsilonStmt fs s) where
     Just (p, s) = M.lookup f fs
 
+removeEpsilonFrom :: MonadState (M.Map TH.Name (TH.Pat, Stmt)) f =>
+                     M.Map TH.Name (TH.Pat, Stmt) -> TH.Name -> f ()
 removeEpsilonFrom fs f = do
     b <- gets (M.member f)
     unless b $ do
@@ -202,8 +216,8 @@ removeEpsilonFrom fs f = do
     where Just (p, s) = M.lookup f fs
 
 removeEpsilon :: NProg -> NProg
-removeEpsilon (NProg n t ps is fs f1 e1 cs) = NProg n t ps is fs' f1 e1 cs
-    where fs' = flip execState M.empty $ removeEpsilonFrom fs f1
+removeEpsilon prog = prog { nProgFuns = fs' }
+    where fs' = flip execState M.empty $ removeEpsilonFrom (nProgFuns prog) (nProgInit prog)
 
 -- Call graph calculation
 
@@ -219,18 +233,18 @@ callGraph :: FunMap -> CG
 callGraph fs = M.toList fs >>= \(n, (_, s)) -> callGraphStmt n s
 
 callGraphStmt :: TH.Name -> Stmt -> CG
-callGraphStmt n SNop = mzero
-callGraphStmt n (SEmit _) = mzero
+callGraphStmt _ SNop = mzero
+callGraphStmt _ (SEmit _) = mzero
 callGraphStmt n (SVar _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
 callGraphStmt n (SLet _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
-callGraphStmt n (SAssign _ _) = mzero
+callGraphStmt _ (SAssign _ _) = mzero
 callGraphStmt n (SRet vs) = callGraphVStmt n True vs
 callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
 callGraphStmt n (SIf _ st sf) = callGraphStmt n st `mplus` callGraphStmt n sf
 callGraphStmt n (SCase _ cs) = callGraphStmt n =<< map snd cs
 
 callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
-callGraphVStmt n t (VExp _) = mzero
+callGraphVStmt _ _ (VExp _) = mzero
 callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
 
 -- Returning functions calculation
@@ -262,22 +276,22 @@ saturateSet m s = g s S.empty where
 -- Convert calls to returning functions to non-tail calls
 
 deTailCall :: MonadRefresh m => NProg -> m NProg
-deTailCall (NProg n t ps is fs f1 e1 cs) = do
-    fs' <- mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) fs
-    return $ NProg n t ps is fs' f1 e1 cs
+deTailCall prog = do
+    fs' <- mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) (nProgFuns prog)
+    return $ prog { nProgFuns = fs' }
     where
-    rf = returningFuns fs
+    rf = returningFuns $ nProgFuns prog
 
 deTailCallStmt :: MonadRefresh m => S.Set TH.Name -> Stmt -> m Stmt
-deTailCallStmt rf s@(SNop) = return s
-deTailCallStmt rf s@(SEmit _) = return s
+deTailCallStmt _  s@(SNop) = return s
+deTailCallStmt _  s@(SEmit _) = return s
 deTailCallStmt rf   (SVar n e s) = SVar n e <$> deTailCallStmt rf s
 deTailCallStmt rf   (SLet n e s) = SLet n e <$> deTailCallStmt rf s
-deTailCallStmt rf s@(SAssign _ _) = return s
+deTailCallStmt _  s@(SAssign _ _) = return s
 deTailCallStmt rf   (SBlock ss) = SBlock <$> mapM (deTailCallStmt rf) ss
 deTailCallStmt rf   (SIf e st sf) = SIf e <$> deTailCallStmt rf st <*> deTailCallStmt rf sf
 deTailCallStmt rf   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) cs
-deTailCallStmt rf s@(SRet (VExp _)) = return s
+deTailCallStmt _  s@(SRet (VExp _)) = return s
 deTailCallStmt rf s@(SRet (VCall f e))
     | f `S.member` rf = do
         n <- refreshName f
@@ -327,9 +341,9 @@ makeTailCallsStmt s@(SRet (VCall _ _)) = return s
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
-makeTailCalls (NProg n t ps is fs f1 e1 cs) = do
-    let fvs = freeVarsStmt $ SFun fs SNop
-    (fsd, cds) <- runWriterT $ forM (M.toList fs) $ \(n, (p, s)) -> do
+makeTailCalls prog = do
+    let fvs = freeVarsStmt $ SFun (nProgFuns prog) SNop
+    (fsd, cds) <- runWriterT $ forM (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         if n `S.member` rfs
         then do
             cfn <- makeName "c"
@@ -345,10 +359,10 @@ makeTailCalls (NProg n t ps is fs f1 e1 cs) = do
     apfs <- mapM (apf cdmap) rfsd
     cdefs <- mapM (cdef cdmap) rfsd
     let fs' = M.fromList $ apfs ++ map snd fsd
-    return $ NProg n t ps is fs' f1 e1 (M.unions cdefs `M.union` cs)
+    return $ prog { nProgFuns = fs', nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
-    rfs = returningFuns fs
-    apf cdmap ((ctn, an), (n, (p, s))) 
+    rfs = returningFuns $ nProgFuns prog
+    apf cdmap ((_ctn, an), (n, (_p, _s))) 
         | Just cds <- M.lookup n cdmap = do
             rn <- makeName "r"
             cfn <- makeName "c"
@@ -362,15 +376,15 @@ makeTailCalls (NProg n t ps is fs f1 e1 cs) = do
                         SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
             return (an, (tupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
         | otherwise = return (an, (tupP [], SNop)) -- will be cleaned up anyway
-    cdef cdmap ((ctn, an), (n, _)) 
+    cdef cdmap ((ctn, _an), (n, _)) 
         | Just cds <- M.lookup n cdmap = do
-            cons <- forM cds $ \cd -> case contDataTgt cd of
+            cs <- forM cds $ \cd -> case contDataTgt cd of
                 ContTgtFun _ ->
                     return (contDataConName cd, contDataVars cd)
                 ContTgtCont _ -> do
                     rcn <- makeName "rc"
                     return (contDataConName cd, rcn : contDataVars cd)
-            return $ M.singleton ctn $ M.fromList cons
+            return $ M.singleton ctn $ M.fromList cs
         | otherwise = return $ M.empty
         
 
