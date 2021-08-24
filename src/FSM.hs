@@ -17,6 +17,8 @@ import System.IO
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str 
     | Right p <- pr = do
+        TH.runIO $ putStrLn ""
+        TH.runIO $ putStrLn $ show $ progName p
         let Just np = toNProg p
         TH.runIO $ putDoc $ prettyNProg np
         np0 <- cutBlocks np
