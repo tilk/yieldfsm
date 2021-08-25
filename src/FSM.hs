@@ -17,19 +17,21 @@ import System.IO
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str 
     | Right p <- pr = do
-        TH.runIO $ putStrLn ""
-        TH.runIO $ putStrLn $ show $ progName p
+        TH.runIO $ hPutStrLn stderr ""
+        TH.runIO $ hPutStrLn stderr $ show $ progName p
         let Just np = toNProg p
-        TH.runIO $ putDoc $ prettyNProg np
+        TH.runIO $ hPutDoc stderr $ prettyNProg np
         np0 <- cutBlocks np
-        TH.runIO $ putDoc $ prettyNProg np0
+        TH.runIO $ hPutDoc stderr $ prettyNProg np0
         np' <- deTailCall np0
-        TH.runIO $ putDoc $ prettyNProg np'
+        TH.runIO $ hPutDoc stderr $ prettyNProg np'
         np'1 <- makeTailCalls np'
-        TH.runIO $ putDoc $ prettyNProg np'1
+        TH.runIO $ hPutDoc stderr $ prettyNProg np'1
         let np'' = removeEpsilon np'1
-        TH.runIO $ putDoc $ prettyNProg np''
-        compileFSM (nprog2desc np'')
+        TH.runIO $ hPutDoc stderr $ prettyNProg np''
+        ret <- compileFSM (nprog2desc np'')
+        TH.runIO $ hFlush stderr
+        return ret
     | Left e <- pr = do
         TH.runIO $ do
             hPutStrLn stderr $ errorBundlePretty e

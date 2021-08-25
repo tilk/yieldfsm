@@ -9,14 +9,16 @@ import qualified Test.Tasty.HUnit as TU
 
 import FSM
 
+dup :: [a] -> [a]
 dup [] = []
 dup (x:xs) = x:x:dup xs
 
+countSlowOpt :: Num a => a -> [Bool] -> [a]
 countSlowOpt _ [] = []
 countSlowOpt n (False:xs) = n:countSlowOpt (n+1) xs
-countSlowOpt n (True:xs) = n:f n xs where
-    f _ [] = []
-    f n (_:xs) = n:countSlowOpt (n+1) xs
+countSlowOpt n (True:xs) = n:f xs where
+    f [] = []
+    f (_:xs') = n:countSlowOpt (n+1) xs'
 
 main :: IO ()
 main = defaultMain $ testGroup "."
@@ -42,125 +44,114 @@ main = defaultMain $ testGroup "."
         CP.simulateN @CP.System 100 (countUpDownFSM m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
   ]
 
-[fsm|countFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom () -> CP.Signal dom Integer
+[fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
+              => CP.Signal dom () -> CP.Signal dom Integer
 inputs ()
-fun f i
-    begin
-        emit i
-        ret call f (i+1)
-    end
+fun f i:
+    emit i
+    ret call f (i+1)
 ret call f 0
 |]
 
-[fsm|countLetFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom () -> CP.Signal dom Integer
+[fsm|countLetFSM :: (CP.HiddenClockResetEnable dom) 
+                 => CP.Signal dom () -> CP.Signal dom Integer
 inputs ()
-fun f i
+fun f i:
     let ii = i+1
-    begin
-        emit i
-        ret call f ii
-    end
+    emit i
+    ret call f ii
 ret call f 0
 |]
 
-[fsm|countSlowFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom () -> CP.Signal dom Integer
+[fsm|countSlowFSM :: (CP.HiddenClockResetEnable dom) 
+                  => CP.Signal dom () -> CP.Signal dom Integer
 inputs ()
-fun f i
-    begin
-        emit i
-        emit i
-        ret call f (i+1)
-    end
+fun f i:
+    emit i
+    emit i
+    ret call f (i+1)
 ret call f 0
 |]
 
-[fsm|countSlowLetFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom () -> CP.Signal dom Integer
+[fsm|countSlowLetFSM :: (CP.HiddenClockResetEnable dom) 
+                     => CP.Signal dom () -> CP.Signal dom Integer
 inputs ()
-fun f i
+fun f i:
     let ii = i+1
-    begin
-        emit i
-        emit i
-        ret call f ii
-    end
+    emit i
+    emit i
+    ret call f ii
 ret call f 0
 |]
 
-[fsm|countSlowOptFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countSlowOptFSM :: (CP.HiddenClockResetEnable dom) 
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
-fun f i
-  begin
-    if b
+fun f i:
+    if b:
       emit i
     emit i
     ret call f (i+1)
-  end
 ret call f 0
 |]
 
-[fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
-fun g (i, j)
-    begin
-        emit i
-        ret call f j
-    end
-fun f i
-    if b
+fun g (i, j):
+    emit i
+    ret call f j
+fun f i:
+    if b:
         ret call g (i, (i+1))
     else
         ret call g (i, i)
 ret call f 0
 |]
 
-[fsm|countEnMoore2FSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMoore2FSM :: (CP.HiddenClockResetEnable dom)
+                      => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
-fun f i
+fun f i:
     let bb = b
-    begin
-        emit i
-        if bb
-            ret call f (i+1)
-        else
-            ret call f i
-    end
+    emit i
+    if bb:
+        ret call f (i+1)
+    else
+        ret call f i
 ret call f 0
 |]
 
-[fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom) => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
-fun g i
-    begin
-        emit i
-        ret call f i
-    end
-fun f i
-    if b
+fun g i:
+    emit i
+    ret call f i
+fun f i:
+    if b:
         ret call g (i+1)
     else
         ret call g i
 ret call f 0
 |]
 
-[fsm|countUpDownFSM :: (CP.HiddenClockResetEnable dom) => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+[fsm|countUpDownFSM :: (CP.HiddenClockResetEnable dom)
+                    => Integer -> CP.Signal dom () -> CP.Signal dom Integer
 param m
 inputs ()
-fun f i
-    begin
-        emit i
-        if i == m
-            ret call g (i-1)
-        else
-            ret call f (i+1)
-    end
-fun g i
-    begin
-        emit i
-        if i == 0
-            ret call f (i+1)
-        else
-            ret call g (i-1)
-    end
+fun f i:
+    emit i
+    if i == m:
+        ret call g (i-1)
+    else
+        ret call f (i+1)
+fun g i:
+    emit i
+    if i == 0:
+        ret call f (i+1)
+    else
+        ret call g (i-1)
 ret call f 0
 |]
 
