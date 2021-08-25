@@ -27,7 +27,7 @@ mkFSM str
         TH.runIO $ hPutDoc stderr $ prettyNProg np'
         np'1 <- makeTailCalls np'
         TH.runIO $ hPutDoc stderr $ prettyNProg np'1
-        let np'' = removeEpsilon np'1
+        np'' <- removeEpsilon np'1
         TH.runIO $ hPutDoc stderr $ prettyNProg np''
         ret <- compileFSM (nprog2desc np'')
         TH.runIO $ hFlush stderr

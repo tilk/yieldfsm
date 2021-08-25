@@ -117,6 +117,7 @@ renameExp s   (TH.UInfixE e1 e e2) = TH.UInfixE (renameExp s e1) (renameExp s e)
 renameExp s   (TH.ParensE e) = TH.ParensE (renameExp s e)
 renameExp s   (TH.LamE ps e) = TH.LamE (renamePat s <$> ps) (renameExp s' e)
     where s' = cutSubst (patUnions $ map freeVarsPat ps) s
+renameExp s   (TH.TupE es) = TH.TupE (fmap (renameExp s) <$> es)
 
 renameFieldPat :: M.Map TH.Name TH.Name -> TH.FieldPat -> TH.FieldPat
 renameFieldPat s (n, p) = (n, renamePat s p)

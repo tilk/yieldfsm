@@ -193,7 +193,7 @@ cutBlocks prog = do
 
 -- Eliminate epsilon transitions
 
-removeEpsilonStmt :: MonadState (M.Map TH.Name (TH.Pat, Stmt)) f =>
+removeEpsilonStmt :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
                      M.Map TH.Name (TH.Pat, Stmt) -> Stmt -> f Stmt
 removeEpsilonStmt _  s@SNop = return s
 removeEpsilonStmt _  s@(SEmit _) = return s
@@ -202,10 +202,13 @@ removeEpsilonStmt fs   (SLet ln vs s) = SLet ln vs <$> removeEpsilonStmt fs s
 removeEpsilonStmt fs   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt fs s
 removeEpsilonStmt fs s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom fs f >> return s
-removeEpsilonStmt fs   (SRet (VCall f e)) = SCase e <$> (return . (p,) <$> removeEpsilonStmt fs s) where
+removeEpsilonStmt fs   (SRet (VCall f e)) = do
+    (p', su) <- refreshPat p
+    SCase e <$> (return . (p',) <$> removeEpsilonStmt fs (renameStmt su s))
+    where
     Just (p, s) = M.lookup f fs
 
-removeEpsilonFrom :: MonadState (M.Map TH.Name (TH.Pat, Stmt)) f =>
+removeEpsilonFrom :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
                      M.Map TH.Name (TH.Pat, Stmt) -> TH.Name -> f ()
 removeEpsilonFrom fs f = do
     b <- gets (M.member f)
@@ -215,9 +218,10 @@ removeEpsilonFrom fs f = do
         modify $ M.insert f (p, s')
     where Just (p, s) = M.lookup f fs
 
-removeEpsilon :: NProg -> NProg
-removeEpsilon prog = prog { nProgFuns = fs' }
-    where fs' = flip execState M.empty $ removeEpsilonFrom (nProgFuns prog) (nProgInit prog)
+removeEpsilon :: MonadRefresh m => NProg -> m NProg
+removeEpsilon prog = do
+    fs' <- flip execStateT M.empty $ removeEpsilonFrom (nProgFuns prog) (nProgInit prog)
+    return $ prog { nProgFuns = fs' }
 
 -- Call graph calculation
 
