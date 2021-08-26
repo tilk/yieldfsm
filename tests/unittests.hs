@@ -22,6 +22,7 @@ countSlowOpt n (True:xs) = n:f xs where
 
 main :: IO ()
 main = defaultMain $ testGroup "." [ 
+    testOscillator @CP.System "oscilAssign" oscilAssignFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
     testSlowCounter @CP.System "countSlow" countSlowFSM,
@@ -54,6 +55,18 @@ main = defaultMain $ testGroup "." [
     testCounterUpDown name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
         CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
+
+[fsm|oscilAssignFSM :: (CP.HiddenClockResetEnable dom)
+                    => CP.Signal dom () -> CP.Signal dom Bool
+inputs ()
+fun f ():
+    var x = False
+    emit x
+    x = not x
+    emit x
+    ret call f ()
+ret call f ()
+|]
 
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
               => CP.Signal dom () -> CP.Signal dom Integer

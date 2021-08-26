@@ -29,9 +29,12 @@ compilePat :: TH.Pat -> TH.Q ([TH.Name], TH.Type)
 compilePat (TH.VarP n) = do
     n' <- TH.newName (TH.nameBase n)
     return ([n'], TH.VarT n')
-compilePat (TH.TupP ts) = do
-    rs <- mapM compilePat ts
+compilePat (TH.TupP ps) = do
+    rs <- mapM compilePat ps
     return (fst =<< rs, foldl TH.AppT (TH.TupleT $ length rs) $ map snd rs)
+compilePat (TH.ConP n ps) = do
+    rs <- mapM compilePat ps
+    return (fst =<< rs, foldl TH.AppT (TH.ConT n) $ map snd rs)
 
 makeConNames :: String -> [TH.Name] -> M.Map TH.Name TH.Name
 makeConNames nm = fst . foldl' f (M.empty, M.empty) where

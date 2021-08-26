@@ -171,14 +171,17 @@ cutBlocksStmt (SCase e cs) s' | simpleStmt s' =
         cf (p, s) = do
             (p', su) <- refreshPat p
             (p',) <$> cutBlocksStmt (renameStmt su s) s'
-cutBlocksStmt (SLet t ln vs@(VExp _) s) s' | simpleStmt s' = do
+cutBlocksStmt (SLet _ ln vs@(VExp _) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
-    SLet t ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
-cutBlocksStmt (SLet t ln vs@(VCall _ _) s) s' = do
+    SLet VarLet ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+cutBlocksStmt (SLet _ ln vs@(VCall _ _) s) s' = do
     ln' <- refreshName ln
     s'' <- cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
     s''' <- makeCont s''
-    return $ SLet t ln' vs s'''
+    return $ SLet VarLet ln' vs s'''
+cutBlocksStmt (SAssign ln vs) s' = do
+    ln' <- refreshName ln
+    return $ SLet VarLet ln' vs $ renameStmt (M.singleton ln ln') s'
 cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''
