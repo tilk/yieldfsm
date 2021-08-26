@@ -85,7 +85,7 @@ parseName sc' = TH.mkName <$> ident sc'
 parseVar :: Parser Stmt
 parseVar = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "var" *> parseName sc' <* symbolic sc' '='))
-    SVar i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
+    SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseAssign :: Parser Stmt
 parseAssign = uncurry SAssign <$> parseHsFold (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=') stringToHsExp
@@ -93,7 +93,7 @@ parseAssign = uncurry SAssign <$> parseHsFold (\sc' -> (,) <$> parseName sc' <* 
 parseLet :: Parser Stmt
 parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
-    SLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
+    SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseEmit :: Parser Stmt
 parseEmit = SEmit <$> parseHsFoldSymbol "emit" stringToHsExp

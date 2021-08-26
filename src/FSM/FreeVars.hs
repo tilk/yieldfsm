@@ -88,8 +88,7 @@ freeVarsVStmt (VExp e) = freeVarsExp e
 freeVarsVStmt (VCall n e) = freeVarsExp e
 
 freeVarsStmt :: Stmt -> S.Set TH.Name
-freeVarsStmt (SVar v vs s) = freeVarsVStmt vs `S.union` (freeVarsStmt s `underPat` freeVarsPat (TH.VarP v))
-freeVarsStmt (SLet v vs s) = freeVarsVStmt vs `S.union` (freeVarsStmt s `underPat` freeVarsPat (TH.VarP v))
+freeVarsStmt (SLet _ v vs s) = freeVarsVStmt vs `S.union` (freeVarsStmt s `underPat` freeVarsPat (TH.VarP v))
 freeVarsStmt (SAssign v e) = freeVarsExp e
 freeVarsStmt (SEmit e) = freeVarsExp e
 freeVarsStmt (SRet vs) = freeVarsVStmt vs
@@ -144,9 +143,7 @@ cutSubst :: PatFV -> M.Map TH.Name a -> M.Map TH.Name a
 cutSubst (PatFV vs _) s = M.withoutKeys s vs
 
 renameStmt :: M.Map TH.Name TH.Name -> Stmt -> Stmt
-renameStmt su   (SVar v vs s) = SVar v (renameVStmt su' vs) (renameStmt su' s)
-    where su' = cutSubst (patSingleton v) su
-renameStmt su   (SLet v vs s) = SLet v (renameVStmt su' vs) (renameStmt su' s)
+renameStmt su   (SLet t v vs s) = SLet t v (renameVStmt su' vs) (renameStmt su' s)
     where su' = cutSubst (patSingleton v) su
 renameStmt su   (SAssign v e) = SAssign (renameName su v) (renameExp su e)
 renameStmt su   (SEmit e) = SEmit (renameExp su e)

@@ -27,7 +27,7 @@ $(makeLenses ''LifterState)
 -}
 
 lambdaLiftStmt :: Monad f => Stmt -> f Stmt
-lambdaLiftStmt   (SLet ln vs s) = SLet ln <$> lambdaLiftVStmt vs <*> lambdaLiftStmt s
+lambdaLiftStmt   (SLet t ln vs s) = SLet t ln <$> lambdaLiftVStmt vs <*> lambdaLiftStmt s
 lambdaLiftStmt s@(SEmit _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
 lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
@@ -171,14 +171,14 @@ cutBlocksStmt (SCase e cs) s' | simpleStmt s' =
         cf (p, s) = do
             (p', su) <- refreshPat p
             (p',) <$> cutBlocksStmt (renameStmt su s) s'
-cutBlocksStmt (SLet ln vs@(VExp _) s) s' | simpleStmt s' = do
+cutBlocksStmt (SLet t ln vs@(VExp _) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
-    SLet ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
-cutBlocksStmt (SLet ln vs@(VCall _ _) s) s' = do
+    SLet t ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+cutBlocksStmt (SLet t ln vs@(VCall _ _) s) s' = do
     ln' <- refreshName ln
     s'' <- cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
     s''' <- makeCont s''
-    return $ SLet ln' vs s'''
+    return $ SLet t ln' vs s'''
 cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''
@@ -198,7 +198,7 @@ removeEpsilonStmt :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) 
 removeEpsilonStmt _  s@SNop = return s
 removeEpsilonStmt _  s@(SEmit _) = return s
 removeEpsilonStmt fs   (SIf e st sf) = SIf e <$> removeEpsilonStmt fs st <*> removeEpsilonStmt fs sf
-removeEpsilonStmt fs   (SLet ln vs s) = SLet ln vs <$> removeEpsilonStmt fs s
+removeEpsilonStmt fs   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt fs s
 removeEpsilonStmt fs   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt fs s
 removeEpsilonStmt fs s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom fs f >> return s
@@ -239,8 +239,7 @@ callGraph fs = M.toList fs >>= \(n, (_, s)) -> callGraphStmt n s
 callGraphStmt :: TH.Name -> Stmt -> CG
 callGraphStmt _ SNop = mzero
 callGraphStmt _ (SEmit _) = mzero
-callGraphStmt n (SVar _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
-callGraphStmt n (SLet _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
+callGraphStmt n (SLet _ _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
 callGraphStmt _ (SAssign _ _) = mzero
 callGraphStmt n (SRet vs) = callGraphVStmt n True vs
 callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
@@ -262,8 +261,7 @@ returningFuns fs = saturateSet (flip (M.findWithDefault S.empty) tailCalled) dir
 isReturningStmt :: Stmt -> Bool
 isReturningStmt SNop = False
 isReturningStmt (SEmit _) = False
-isReturningStmt (SVar _ _ s) = isReturningStmt s
-isReturningStmt (SLet _ _ s) = isReturningStmt s
+isReturningStmt (SLet _ _ _ s) = isReturningStmt s
 isReturningStmt (SAssign _ _) = False
 isReturningStmt (SBlock ss) = or $ isReturningStmt <$> ss
 isReturningStmt (SIf _ st sf) = isReturningStmt st || isReturningStmt sf
@@ -289,8 +287,7 @@ deTailCall prog = do
 deTailCallStmt :: MonadRefresh m => S.Set TH.Name -> Stmt -> m Stmt
 deTailCallStmt _  s@(SNop) = return s
 deTailCallStmt _  s@(SEmit _) = return s
-deTailCallStmt rf   (SVar n e s) = SVar n e <$> deTailCallStmt rf s
-deTailCallStmt rf   (SLet n e s) = SLet n e <$> deTailCallStmt rf s
+deTailCallStmt rf   (SLet t n e s) = SLet t n e <$> deTailCallStmt rf s
 deTailCallStmt _  s@(SAssign _ _) = return s
 deTailCallStmt rf   (SBlock ss) = SBlock <$> mapM (deTailCallStmt rf) ss
 deTailCallStmt rf   (SIf e st sf) = SIf e <$> deTailCallStmt rf st <*> deTailCallStmt rf sf
@@ -299,7 +296,7 @@ deTailCallStmt _  s@(SRet (VExp _)) = return s
 deTailCallStmt rf s@(SRet (VCall f e))
     | f `S.member` rf = do
         n <- refreshName f
-        return $ SLet n (VCall f e) (SRet (VExp $ TH.VarE n))
+        return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
     | otherwise = return s
 
 -- Converting to tail calls
@@ -325,19 +322,19 @@ data ContData = ContData {
 data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 
 makeTailCallsStmt :: (MonadRefresh m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
-makeTailCallsStmt   (SLet n (VCall f e) (SRet (VExp e'))) = do
+makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VExp e'))) = do
     TCData cfn _ an fvs fn <- ask
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
     cn <- refreshNameWithPrefix "C" f
     tell [ContData cn fn f n vs e' (ContTgtCont an)]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
-makeTailCallsStmt   (SLet n (VCall f e) (SRet (VCall f' e'))) = do
+makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VCall f' e'))) = do
     TCData _ _ _ fvs fn <- ask
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
     cn <- refreshNameWithPrefix "C" f
     tell [ContData cn fn f n vs e' (ContTgtFun f')]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
-makeTailCallsStmt   (SLet n (VExp e) s) = SLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
+makeTailCallsStmt   (SLet VarLet n (VExp e) s) = SLet VarLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
 makeTailCallsStmt   (SIf e st sf) = SIf e <$> makeTailCallsStmt st <*> makeTailCallsStmt sf
 makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTailCallsStmt s) cs
 makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> asks tcDataCont))
@@ -373,11 +370,11 @@ makeTailCalls prog = do
             cs <- forM cds $ \cd -> case contDataTgt cd of
                 ContTgtFun fn ->
                     return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ contDataVars cd],
-                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall fn (contDataExp cd)))
+                        SLet VarLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall fn (contDataExp cd)))
                 ContTgtCont rap -> do
                     rcn <- makeName "rc"
                     return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ rcn : contDataVars cd],
-                        SLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
+                        SLet VarLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
             return (an, (tupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
         | otherwise = return (an, (tupP [], SNop)) -- will be cleaned up anyway
     cdef cdmap ((ctn, _an), (n, _)) 
