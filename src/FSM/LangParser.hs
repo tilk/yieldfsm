@@ -88,7 +88,7 @@ parseVar = do
     SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseAssign :: Parser Stmt
-parseAssign = uncurry SAssign <$> parseHsFold (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=') stringToHsExp
+parseAssign = uncurry SAssign <$> parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
 
 parseLet :: Parser Stmt
 parseLet = do

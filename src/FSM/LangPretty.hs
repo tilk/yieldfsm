@@ -14,13 +14,13 @@ prettyTH n = pretty $ TH.pprint n
 
 prettyStmt :: Stmt -> Doc ann
 prettyStmt SNop = prettyKeyword "nop"
-prettyStmt (SLet t n e s) = vcat [prettyKeyword (kw t) <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt e, prettyStmt s]
+prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt vs, prettyStmt s]
     where
     kw VarLet = "let"
     kw VarMut = "var"
-prettyStmt (SAssign n e) = prettyTH n <+> prettyKeyword "=" <+> prettyTH e
+prettyStmt (SAssign n vs) = prettyTH n <+> prettyKeyword "=" <+> prettyVStmt vs
 prettyStmt (SEmit e) = prettyKeyword "emit" <+> prettyTH e
-prettyStmt (SRet e) = prettyKeyword "ret" <+> prettyVStmt e
+prettyStmt (SRet vs) = prettyKeyword "ret" <+> prettyVStmt vs
 prettyStmt (SFun fs s) = vcat $ map f (M.toList fs) ++ [prettyStmt s]
     where f (n, (p, s')) = nest 4 $ prettyKeyword "fun" <+> prettyTH n <+> prettyTH p <> prettyKeyword ":" <> line <> prettyStmt s'
 prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> prettyTH e <> prettyKeyword ":", indent 4 (prettyStmt st), prettyKeyword "else", indent 4 (prettyStmt sf)]

@@ -13,7 +13,7 @@ data VStmt = VExp TH.Exp
 data VarKind = VarLet | VarMut deriving Show
 
 data Stmt = SLet VarKind TH.Name VStmt Stmt
-          | SAssign TH.Name TH.Exp
+          | SAssign TH.Name VStmt
           | SEmit TH.Exp
           | SRet VStmt
           | SFun FunMap Stmt
