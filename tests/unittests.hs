@@ -21,28 +21,39 @@ countSlowOpt n (True:xs) = n:f xs where
     f (_:xs') = n:countSlowOpt (n+1) xs'
 
 main :: IO ()
-main = defaultMain $ testGroup "."
-  [ 
-    TU.testCase "count" $ CP.simulateN @CP.System 100 countFSM (repeat ()) TU.@?= [(0 :: Integer)..99],
-    TU.testCase "countLet" $ CP.simulateN @CP.System 100 countLetFSM (repeat ()) TU.@?= [(0 :: Integer)..99],
-    TU.testCase "countSlow" $ CP.simulateN @CP.System 100 countSlowFSM (repeat ()) TU.@?= dup [(0 :: Integer)..49],
-    TU.testCase "countSlowLet" $ CP.simulateN @CP.System 100 countSlowLetFSM (repeat ()) TU.@?= dup [(0 :: Integer)..49],
-    TH.testProperty "countSlowOpt" $ H.property $ do
+main = defaultMain $ testGroup "." [ 
+    testCounter @CP.System "count" countFSM,
+    testCounter @CP.System "countLet" countLetFSM,
+    testSlowCounter @CP.System "countSlow" countSlowFSM,
+    testSlowCounter @CP.System "countSlowLet" countSlowLetFSM,
+    testSlowOptCounter @CP.System "countSlowOpt" countSlowOptFSM,
+    testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
+    testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
+    testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
+    testCounterUpDown @CP.System "countUpDown" countUpDownFSM]
+    where
+    testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Bool) -> TestTree
+    testOscillator name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= take 100 (cycle [False, True])
+    testCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+    testCounter name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= [(0 :: Integer)..99]
+    testSlowCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+    testSlowCounter name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= dup [(0 :: Integer)..49]
+    testSlowOptCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
+    testSlowOptCounter name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
-        CP.simulateN @CP.System (length l) countSlowOptFSM l H.=== countSlowOpt 0 l,
-    TH.testProperty "countEnMoore" $ H.property $ do
+        CP.simulateN (length l) machine l H.=== countSlowOpt 0 l
+    testCounterEnMoore :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
+    testCounterEnMoore name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
-        CP.simulateN @CP.System (length l) countEnMooreFSM l H.=== take (length l) (scanl (\a b -> if b then a+1 else a) 0 l),
-    TH.testProperty "countEnMoore2" $ H.property $ do
+        CP.simulateN (length l) machine l H.=== take (length l) (scanl (\a b -> if b then a+1 else a) 0 l)
+    testCounterEnMealy :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
+    testCounterEnMealy name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
-        CP.simulateN @CP.System (length l) countEnMoore2FSM l H.=== take (length l) (scanl (\a b -> if b then a+1 else a) 0 l),
-    TH.testProperty "countEnMealy" $ H.property $ do
-        l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
-        CP.simulateN @CP.System (length l) countEnMealyFSM l H.=== drop 1 (scanl (\a b -> if b then a+1 else a) 0 l),
-    TH.testProperty "countUpDown" $ H.property $ do
+        CP.simulateN (length l) machine l H.=== drop 1 (scanl (\a b -> if b then a+1 else a) 0 l)
+    testCounterUpDown :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+    testCounterUpDown name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
-        CP.simulateN @CP.System 100 (countUpDownFSM m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
-  ]
+        CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
 
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
               => CP.Signal dom () -> CP.Signal dom Integer
