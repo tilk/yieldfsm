@@ -68,6 +68,7 @@ common common-options
     prettyprinter >= 1.7 && < 1.8,
     mtl >= 2.2 && < 2.3,
     lens >= 4.19 && < 4.20,
+    keys >= 3.12 && < 3.13,
 
     -- clash-prelude will set suitable version bounds for the plugins
     clash-prelude >= 1.2.5 && < 1.6,

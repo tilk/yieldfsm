@@ -19,7 +19,7 @@ mkFSM str
     | Right p <- pr = do
         TH.runIO $ hPutStrLn stderr ""
         TH.runIO $ hPutStrLn stderr $ show $ progName p
-        let Just np = toNProg p
+        np <- lambdaLift p
         TH.runIO $ hPutDoc stderr $ prettyNProg np
         np0 <- cutBlocks np
         TH.runIO $ hPutDoc stderr $ prettyNProg np0
@@ -38,7 +38,7 @@ mkFSM str
             hFlush stderr
         fail "FAIL"
     where
-    pr = runParser parseProg "" str
+    pr = runParseProg str
 
 fsm :: THQ.QuasiQuoter
 fsm = THQ.QuasiQuoter undefined undefined undefined mkFSM

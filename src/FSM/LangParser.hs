@@ -1,5 +1,5 @@
 {-# LANGUAGE TupleSections #-}
-module FSM.LangParser(parseProg) where
+module FSM.LangParser(runParseProg) where
 
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.Meta as HM
@@ -163,4 +163,7 @@ parseProg = prog <$> parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> (
                  <*> parseHsFoldSymbol "inputs" stringToHsPat
                  <*> parseBasicStmt
     where prog = uncurry Prog
+
+runParseProg :: String -> Either (ParseErrorBundle String Void) Prog
+runParseProg = runParser parseProg ""
 

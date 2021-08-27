@@ -42,10 +42,6 @@ data NProg = NProg {
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving Show
 
-toNProg :: Prog -> Maybe NProg
-toNProg (Prog n t ps is (SFun fs (SRet (VCall f1 e1)))) = Just (NProg n t ps is fs f1 e1 M.empty)
-toNProg _ = Nothing
-
 sBlock :: [Stmt] -> Stmt
 sBlock [] = SNop
 sBlock [s] = s

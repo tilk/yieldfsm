@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module FSM.Lang2Desc where
+module FSM.Lang2Desc(nprog2desc) where
 
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
@@ -19,9 +19,6 @@ stmts2dtree [SEmit e, SRet (VCall n ec)] = DTLeaf $ Transition e n ec
 
 fun2state :: (TH.Pat, Stmt) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree s)
-
-lang2desc :: Prog -> Maybe FSM
-lang2desc p = nprog2desc <$> toNProg p
 
 nprog2desc (NProg n t ps is fs f1 e1 cs) = FSM { 
     fsmName = n,
