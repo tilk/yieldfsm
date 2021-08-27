@@ -35,7 +35,9 @@ type LLEnv = M.Map TH.Name (TH.Name, [TH.Name])
 $(makeLenses ''LLData)
 
 lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
-lambdaLiftStmt   (SLet t ln vs s) = SLet t ln <$> lambdaLiftVStmt vs <*> lambdaLiftStmt s
+lambdaLiftStmt   (SLet t ln vs s) = do
+    ln' <- refreshName ln
+    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmt (M.singleton ln ln') s)
 lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
 lambdaLiftStmt s@(SEmit _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
@@ -51,8 +53,9 @@ lambdaLiftStmt   (SFun fm s) = do
         modify $ M.union $ M.mapKeys (fst . fromJust . flip M.lookup e) fm'
         lambdaLiftStmt s
     where
-    processFun n (p, s') = 
-        (,) <$> (tupP . (++ [p]) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt s'
+    processFun n (p, s') = do
+        (p', su) <- refreshPat p
+        (,) <$> (tupP . (++ [p']) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt (renameStmt su s')
 
 lambdaLiftVStmt :: (Monad m, MonadReader LLData m) => VStmt -> m VStmt
 lambdaLiftVStmt vs@(VExp _) = return vs
@@ -343,17 +346,17 @@ data ContData = ContData {
 
 data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 
-makeTailCallsStmt :: (MonadRefresh m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
+makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VExp e'))) = do
     TCData cfn _ an fvs fn <- ask
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
-    cn <- refreshNameWithPrefix "C" f
+    cn <- makeSeqName $ "C" ++ TH.nameBase f
     tell [ContData cn fn f n vs e' (ContTgtCont an)]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VCall f' e'))) = do
     TCData _ _ _ fvs fn <- ask
     let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
-    cn <- refreshNameWithPrefix "C" f
+    cn <- makeSeqName $ "C" ++ TH.nameBase f
     tell [ContData cn fn f n vs e' (ContTgtFun f')]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
 makeTailCallsStmt   (SLet VarLet n (VExp e) s) = SLet VarLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
@@ -364,7 +367,7 @@ makeTailCallsStmt s@(SRet (VCall _ _)) = return s
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
-makeTailCalls prog = do
+makeTailCalls prog = evalUniqueT $ do
     let fvs = freeVarsStmt $ SFun (nProgFuns prog) SNop
     (fsd, cds) <- runWriterT $ forM (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         if n `S.member` rfs

@@ -62,12 +62,12 @@ compileFSM fsm = do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' (map ((b,) . TH.VarT) ns)
         let contTvars = map TH.PlainTV $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
-    return [TH.DataD [] stateName tvars Nothing stateCons [derivclause],
-            TH.SigD (fsmName fsm) (fsmType fsm),
-            TH.FunD (fsmName fsm) [TH.Clause (fsmParams fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) (
-                TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [] :
-                TH.FunD funcName funcClauses :
+    return $ TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
+                TH.SigD (fsmName fsm) (fsmType fsm) :
+                TH.FunD (fsmName fsm) [TH.Clause (fsmParams fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) (
+                    TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [] :
+                    TH.FunD funcName funcClauses : []
+                )] :
                 contDecls
-            )]]
 
 
