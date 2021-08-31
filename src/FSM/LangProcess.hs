@@ -17,60 +17,11 @@ import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 --import qualified Language.Haskell.TH.Syntax as THS
 
-tupE :: [TH.Exp] -> TH.Exp
-tupE [x] = x
-tupE xs = TH.TupE . map Just $ xs
-
-tupP :: [TH.Pat] -> TH.Pat
-tupP [x] = x
-tupP xs = TH.TupP xs
-
-data LLData = LLData {
-    _llDataFreeVars :: S.Set TH.Name,
-    _llDataEnv :: LLEnv
-}
-
-type LLEnv = M.Map TH.Name (TH.Name, [TH.Name])
-
-$(makeLenses ''LLData)
-
-lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
-lambdaLiftStmt   (SLet t ln vs s) = do
-    ln' <- refreshName ln
-    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmt (M.singleton ln ln') s)
-lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
-lambdaLiftStmt s@(SEmit _) = return s
-lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
-lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
-lambdaLiftStmt   (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
-lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLiftStmt s) cs
-lambdaLiftStmt s@(SNop) = return s
-lambdaLiftStmt   (SFun fm s) = do
-    fvs <- view llDataFreeVars
-    e <- forWithKeyM fm $ \n (p, s) -> (, S.elems $ freeVarsStmt s `S.difference` fvs `underPat` freeVarsPat p) <$> refreshName n
-    locally llDataEnv (M.union e) $ do
-        fm' <- mapWithKeyM processFun fm
-        modify $ M.union $ M.mapKeys (fst . fromJust . flip M.lookup e) fm'
-        lambdaLiftStmt s
-    where
-    processFun n (p, s') = do
-        (p', su) <- refreshPat p
-        (,) <$> (tupP . (++ [p']) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt (renameStmt su s')
-
-lambdaLiftVStmt :: (Monad m, MonadReader LLData m) => VStmt -> m VStmt
-lambdaLiftVStmt vs@(VExp _) = return vs
-lambdaLiftVStmt    (VCall n e) = do
-    (n', vs) <- views llDataEnv (fromJust . M.lookup n)
-    return $ VCall n' $ tupE $ map TH.VarE vs ++ [e]
-
-lambdaLift :: MonadRefresh m => Prog -> m NProg
-lambdaLift prog = do
-    (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVarsStmt $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
-    case s of
-        SRet (VCall f e) -> return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) fm f e M.empty
-        _ -> do
-            f <- refreshName $ TH.mkName "init"
-            return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) (M.insert f (tupP [], s) fm) f (tupE []) M.empty
+saturateSet :: Ord k => (k -> S.Set k) -> S.Set k -> S.Set k
+saturateSet m = flip g S.empty where
+    g s = foldr (.) id (map f (S.toList s))
+    f n s | n `S.member` s = s
+          | otherwise = g (m n) (S.insert n s)
 
 -- Unique generator
 
@@ -149,7 +100,7 @@ refreshPat = runWriterT . f where
         p' <- f p
         writer (TH.AsP v' p', M.singleton v v')
     f p@(TH.WildP) = return p
-    f   (TH.RecP n fps) = TH.RecP n <$> forM fps (\(n, p) -> (n,) <$> f p)
+    f   (TH.RecP n fps) = TH.RecP n <$> forM fps (\(n', p) -> (n',) <$> f p)
     f   (TH.ListP ps) = TH.ListP <$> mapM f ps
     f   (TH.SigP p t) = TH.SigP <$> f p <*> pure t
     f   (TH.ViewP e p) = TH.ViewP e <$> f p
@@ -158,6 +109,61 @@ simpleStmt :: Stmt -> Bool
 simpleStmt SNop = True
 simpleStmt (SRet _) = True
 simpleStmt _ = False
+
+tupE :: [TH.Exp] -> TH.Exp
+tupE [x] = x
+tupE xs = TH.TupE . map Just $ xs
+
+tupP :: [TH.Pat] -> TH.Pat
+tupP [x] = x
+tupP xs = TH.TupP xs
+
+data LLData = LLData {
+    _llDataFreeVars :: S.Set TH.Name,
+    _llDataEnv :: LLEnv
+}
+
+type LLEnv = M.Map TH.Name (TH.Name, [TH.Name])
+
+$(makeLenses ''LLData)
+
+lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
+lambdaLiftStmt   (SLet t ln vs s) = do
+    ln' <- refreshName ln
+    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmt (M.singleton ln ln') s)
+lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
+lambdaLiftStmt s@(SEmit _) = return s
+lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
+lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
+lambdaLiftStmt   (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
+lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLiftStmt s) cs
+lambdaLiftStmt s@(SNop) = return s
+lambdaLiftStmt   (SFun fm s) = do
+    fvs <- view llDataFreeVars
+    e <- forWithKeyM fm $ \n (p, s') -> (, S.elems $ freeVarsStmt s' `S.difference` fvs `underPat` freeVarsPat p) <$> refreshName n
+    locally llDataEnv (M.union e) $ do
+        fm' <- mapWithKeyM processFun fm
+        modify $ M.union $ M.mapKeys (fst . fromJust . flip M.lookup e) fm'
+        lambdaLiftStmt s
+    where
+    processFun n (p, s') = do
+        (p', su) <- refreshPat p
+        (,) <$> (tupP . (++ [p']) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt (renameStmt su s')
+
+lambdaLiftVStmt :: (Monad m, MonadReader LLData m) => VStmt -> m VStmt
+lambdaLiftVStmt vs@(VExp _) = return vs
+lambdaLiftVStmt    (VCall n e) = do
+    (n', vs) <- views llDataEnv (fromJust . M.lookup n)
+    return $ VCall n' $ tupE $ map TH.VarE vs ++ [e]
+
+lambdaLift :: MonadRefresh m => Prog -> m NProg
+lambdaLift prog = do
+    (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVarsStmt $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
+    case s of
+        SRet (VCall f e) -> return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) fm f e M.empty
+        _ -> do
+            f <- refreshName $ TH.mkName "init"
+            return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) (M.insert f (tupP [], s) fm) f (tupE []) M.empty
 
 -- Sorta-kinda CPS transformation
 
@@ -232,6 +238,7 @@ removeEpsilonStmt fs   (SRet (VCall f e)) = do
     SCase e <$> (return . (p',) <$> removeEpsilonStmt fs (renameStmt su s))
     where
     Just (p, s) = M.lookup f fs
+removeEpsilonStmt _ s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
 
 removeEpsilonFrom :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
                      M.Map TH.Name (TH.Pat, Stmt) -> TH.Name -> f ()
@@ -270,6 +277,7 @@ callGraphStmt n (SRet vs) = callGraphVStmt n True vs
 callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
 callGraphStmt n (SIf _ st sf) = callGraphStmt n st `mplus` callGraphStmt n sf
 callGraphStmt n (SCase _ cs) = callGraphStmt n =<< map snd cs
+callGraphStmt _ s@(SFun _ _) = error $ "callGraphStmt statement not in lambda-lifted form: " ++ show s
 
 callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
 callGraphVStmt _ _ (VExp _) = mzero
@@ -293,12 +301,7 @@ isReturningStmt (SIf _ st sf) = isReturningStmt st || isReturningStmt sf
 isReturningStmt (SCase _ cs) = or $ isReturningStmt <$> map snd cs
 isReturningStmt (SRet (VExp _)) = True
 isReturningStmt (SRet (VCall _ _)) = False
-
-saturateSet :: Ord k => (k -> S.Set k) -> S.Set k -> S.Set k
-saturateSet m s = g s S.empty where
-    g s = foldr (.) id (map f (S.toList s))
-    f n s | n `S.member` s = s
-          | otherwise = g (m n) (S.insert n s)
+isReturningStmt (SFun _ s) = isReturningStmt s
 
 -- Convert calls to returning functions to non-tail calls
 
@@ -323,6 +326,7 @@ deTailCallStmt rf s@(SRet (VCall f e))
         n <- refreshName f
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
     | otherwise = return s
+deTailCallStmt _ s@(SFun _ _) = error $ "deTailCallStmt statement not in lambda-lifted form: " ++ show s
 
 -- Converting to tail calls
 
@@ -365,6 +369,7 @@ makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTai
 makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> asks tcDataCont))
 makeTailCallsStmt s@(SRet (VCall _ _)) = return s
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
+makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
 makeTailCalls prog = evalUniqueT $ do

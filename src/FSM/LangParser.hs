@@ -132,6 +132,9 @@ parseCase = do
 parseNop :: Parser Stmt
 parseNop = singleSymbol "nop" *> return SNop
 
+parseCall :: Parser Stmt
+parseCall = (\vs -> SLet VarLet (TH.mkName "_") vs SNop) <$> parseHsFold (\sc' -> VCall <$> (L.symbol sc' "call" *> parseName sc')) stringToHsExp
+
 parseBasicStmt :: Parser Stmt
 parseBasicStmt = parseVar
              <|> parseLet
@@ -143,6 +146,7 @@ parseBasicStmt = parseVar
              <|> parseBlock
              <|> parseNop
              <|> parseAssign
+             <|> parseCall
 
 mkStmt :: [Stmt] -> Stmt
 mkStmt [] = SNop

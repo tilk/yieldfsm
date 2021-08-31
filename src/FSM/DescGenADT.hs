@@ -60,7 +60,7 @@ compileFSM fsm = do
         TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
     contDecls <- forM (M.assocs $ fsmConts fsm) $ \(n, cs) -> do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' (map ((b,) . TH.VarT) ns)
-        let contTvars = map TH.PlainTV $ concat (M.elems cs)
+        let contTvars = map TH.PlainTV $ nub $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
     return $ TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
                 TH.SigD (fsmName fsm) (fsmType fsm) :
