@@ -285,10 +285,10 @@ callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
 
 -- Returning functions calculation
 
-returningFuns :: FunMap -> S.Set TH.Name
-returningFuns fs = saturateSet (flip (M.findWithDefault S.empty) tailCalled) directRet
+returningFuns :: FunMap -> S.Set TH.Name -> S.Set TH.Name
+returningFuns fs rf = saturateSet (flip (M.findWithDefault S.empty) tailCalled) directRet
     where
-    directRet = S.fromList [n | (n, (_, s)) <- M.toList fs, isReturningStmt s ]
+    directRet = S.fromList [n | (n, (_, s)) <- M.toList fs, isReturningStmt s ] `S.union` rf
     tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail $ callGraph fs
 
 isReturningStmt :: Stmt -> Bool
@@ -305,12 +305,10 @@ isReturningStmt (SFun _ s) = isReturningStmt s
 
 -- Convert calls to returning functions to non-tail calls
 
-deTailCall :: MonadRefresh m => NProg -> m NProg
+deTailCall :: MonadRefresh m => Prog -> m Prog
 deTailCall prog = do
-    fs' <- mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) (nProgFuns prog)
-    return $ prog { nProgFuns = fs' }
-    where
-    rf = returningFuns $ nProgFuns prog
+    s' <- deTailCallStmt S.empty $ progBody prog
+    return $ prog { progBody = s' }
 
 deTailCallStmt :: MonadRefresh m => S.Set TH.Name -> Stmt -> m Stmt
 deTailCallStmt _  s@(SNop) = return s
@@ -326,7 +324,8 @@ deTailCallStmt rf s@(SRet (VCall f e))
         n <- refreshName f
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
     | otherwise = return s
-deTailCallStmt _ s@(SFun _ _) = error $ "deTailCallStmt statement not in lambda-lifted form: " ++ show s
+deTailCallStmt rf   (SFun fs s) = SFun <$> mapM (\(p, s') -> (p,) <$> deTailCallStmt rf' s') fs <*> deTailCallStmt rf' s
+    where rf' = returningFuns fs (rf `S.difference` M.keysSet fs)
 
 -- Converting to tail calls
 
@@ -392,7 +391,7 @@ makeTailCalls prog = evalUniqueT $ do
     let fs' = M.fromList $ apfs ++ map snd fsd
     return $ prog { nProgFuns = fs', nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
-    rfs = returningFuns $ nProgFuns prog
+    rfs = returningFuns (nProgFuns prog) S.empty
     apf cdmap ((_ctn, an), (n, (_p, _s))) 
         | Just cds <- M.lookup n cdmap = do
             rn <- makeName "r"

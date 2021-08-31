@@ -1,4 +1,4 @@
-module FSM.LangPretty(prettyNProg) where
+module FSM.LangPretty(prettyProg, prettyNProg) where
 
 import FSM.Lang
 import Prelude
@@ -36,3 +36,6 @@ prettyNProg :: NProg -> Doc ann
 prettyNProg np = prettyKeyword "inputs" <+> prettyTH (nProgInputs np) <> line
     <> prettyStmt (SFun (nProgFuns np) (SRet (VCall (nProgInit np) (nProgInitParam np)))) <> line
 
+prettyProg :: Prog -> Doc ann
+prettyProg np = prettyKeyword "inputs" <+> prettyTH (progInputs np) <> line
+    <> prettyStmt (progBody np) <> line

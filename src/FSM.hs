@@ -19,15 +19,15 @@ mkFSM str
     | Right p <- pr = do
         TH.runIO $ hPutStrLn stderr ""
         TH.runIO $ hPutStrLn stderr $ show $ progName p
-        np <- lambdaLift p
+        p' <- deTailCall p
+        TH.runIO $ hPutDoc stderr $ prettyProg p'
+        np <- lambdaLift p'
         TH.runIO $ hPutDoc stderr $ prettyNProg np
         np0 <- cutBlocks np
         TH.runIO $ hPutDoc stderr $ prettyNProg np0
-        np' <- deTailCall np0
+        np' <- makeTailCalls np0
         TH.runIO $ hPutDoc stderr $ prettyNProg np'
-        np'1 <- makeTailCalls np'
-        TH.runIO $ hPutDoc stderr $ prettyNProg np'1
-        np'' <- removeEpsilon np'1
+        np'' <- removeEpsilon np'
         TH.runIO $ hPutDoc stderr $ prettyNProg np''
         ret <- compileFSM (nprog2desc np'')
         TH.runIO $ hFlush stderr
