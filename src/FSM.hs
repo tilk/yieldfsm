@@ -21,7 +21,9 @@ mkFSM str
         TH.runIO $ hPutStrLn stderr $ show $ progName p
         p' <- deTailCall p
         TH.runIO $ hPutDoc stderr $ prettyProg p'
-        np <- lambdaLift p'
+        p'' <- makeLocalVars p'
+        TH.runIO $ hPutDoc stderr $ prettyProg p''
+        np <- lambdaLift p''
         TH.runIO $ hPutDoc stderr $ prettyNProg np
         np0 <- cutBlocks np
         TH.runIO $ hPutDoc stderr $ prettyNProg np0

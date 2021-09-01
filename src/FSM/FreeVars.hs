@@ -154,6 +154,9 @@ renameStmt su   (SIf e st sf) = SIf (renameExp su e) (renameStmt su st) (renameS
 renameStmt su   (SCase e cs) = SCase (renameExp su e) (flip map cs $ \(p, s) -> (renamePat su p, renameStmt (cutSubst (freeVarsPat p) su) s))
 renameStmt su s@(SNop) = s
 
+renameStmtSingle :: TH.Name -> TH.Name -> Stmt -> Stmt
+renameStmtSingle n n' = renameStmt (M.singleton n n')
+
 renameVStmt :: M.Map TH.Name TH.Name -> VStmt -> VStmt
 renameVStmt su (VExp e) = VExp (renameExp su e)
 renameVStmt su (VCall n e) = VCall n (renameExp su e)

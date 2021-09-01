@@ -130,7 +130,7 @@ $(makeLenses ''LLData)
 lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
 lambdaLiftStmt   (SLet t ln vs s) = do
     ln' <- refreshName ln
-    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmt (M.singleton ln ln') s)
+    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmtSingle ln ln' s)
 lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
 lambdaLiftStmt s@(SEmit _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
@@ -201,15 +201,15 @@ cutBlocksStmt (SCase e cs) s' | simpleStmt s' =
             (p',) <$> cutBlocksStmt (renameStmt su s) s'
 cutBlocksStmt (SLet _ ln vs@(VExp _) s) s' | simpleStmt s' = do
     ln' <- refreshName ln
-    SLet VarLet ln' vs <$> cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+    SLet VarLet ln' vs <$> cutBlocksStmt (renameStmtSingle ln ln' s) s'
 cutBlocksStmt (SLet _ ln vs@(VCall _ _) s) s' = do
     ln' <- refreshName ln
-    s'' <- cutBlocksStmt (renameStmt (M.singleton ln ln') s) s'
+    s'' <- cutBlocksStmt (renameStmtSingle ln ln' s) s'
     s''' <- makeCont s''
     return $ SLet VarLet ln' vs s'''
 cutBlocksStmt (SAssign ln vs) s' = do
     ln' <- refreshName ln
-    return $ SLet VarLet ln' vs $ renameStmt (M.singleton ln ln') s'
+    return $ SLet VarLet ln' vs $ renameStmtSingle ln ln' s'
 cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''
@@ -291,6 +291,9 @@ returningFuns fs rf = saturateSet (flip (M.findWithDefault S.empty) tailCalled) 
     directRet = S.fromList [n | (n, (_, s)) <- M.toList fs, isReturningStmt s ] `S.union` rf
     tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail $ callGraph fs
 
+updateRetFuns :: FunMap -> S.Set TH.Name -> S.Set TH.Name
+updateRetFuns fs rf = returningFuns fs (rf `S.difference` M.keysSet fs)
+
 isReturningStmt :: Stmt -> Bool
 isReturningStmt SNop = False
 isReturningStmt (SEmit _) = False
@@ -325,7 +328,75 @@ deTailCallStmt rf s@(SRet (VCall f e))
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
     | otherwise = return s
 deTailCallStmt rf   (SFun fs s) = SFun <$> mapM (\(p, s') -> (p,) <$> deTailCallStmt rf' s') fs <*> deTailCallStmt rf' s
-    where rf' = returningFuns fs (rf `S.difference` M.keysSet fs)
+    where rf' = updateRetFuns fs rf
+
+-- Make mutable variables local
+
+data LVData = LVData {
+    _lvDataReturning :: Bool,
+    _lvDataRetFuns :: S.Set TH.Name,
+    _lvDataMutVars :: [TH.Name],
+    _lvDataEnvVars :: [TH.Name],
+    _lvDataFunVars :: M.Map TH.Name [TH.Name]
+}
+
+$(makeLenses ''LVData)
+
+makeLocalVars :: MonadRefresh m => Prog -> m Prog
+makeLocalVars prog = do
+    s' <- flip runReaderT (LVData False S.empty [] [] M.empty) $ makeLocalVarsStmt $ progBody prog
+    return $ prog { progBody = s' }
+
+makeLocalVarsStmt :: (MonadRefresh m, MonadReader LVData m) => Stmt -> m Stmt
+makeLocalVarsStmt SNop = return SNop
+makeLocalVarsStmt (SEmit e) = return $ SEmit e
+makeLocalVarsStmt (SBlock ss) = SBlock <$> mapM makeLocalVarsStmt ss
+makeLocalVarsStmt (SIf e st sf) = SIf e <$> makeLocalVarsStmt st <*> makeLocalVarsStmt sf
+makeLocalVarsStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeLocalVarsStmt s) cs
+makeLocalVarsStmt (SLet VarLet n vs s) = makeLocalVarsVStmt vs $ \e -> SLet VarLet n (VExp e) <$> makeLocalVarsStmt s
+makeLocalVarsStmt (SLet VarMut n vs s) = makeLocalVarsVStmt vs $ \e -> do
+    n' <- refreshName n
+    SLet VarMut n' (VExp e) <$> locally lvDataMutVars (n':) (makeLocalVarsStmt $ renameStmtSingle n n' s)
+makeLocalVarsStmt (SAssign n vs) = makeLocalVarsVStmt vs (return . SAssign n . VExp)
+makeLocalVarsStmt (SRet vs) = do
+    mvs <- view lvDataEnvVars
+    mvs' <- mvsOf vs
+    r <- view lvDataReturning
+    if not r || mvs == mvs' then
+        SRet <$> makeLocalVarsVStmtRet vs
+    else
+        makeLocalVarsVStmt vs (return . SRet . VExp . tupE . (:map TH.VarE mvs))
+    where
+    mvsOf (VExp _) = return []
+    mvsOf (VCall f _) = views lvDataFunVars $ fromJust . M.lookup f
+makeLocalVarsStmt (SFun fs s) = do
+    mvs0 <- view lvDataMutVars -- TODO deduce actual variable usage
+    locally lvDataFunVars (M.map (const mvs0) fs `M.union`) $ locally lvDataRetFuns (updateRetFuns fs) $ do
+        fs' <- forWithKeyM fs $ \f (p, s') -> do
+            r <- views lvDataRetFuns $ S.member f
+            mvs <- views lvDataFunVars $ fromJust . M.lookup f
+            vns <- replicateM (length mvs) $ makeName "v"
+            let lets = foldr (.) id (zipWith (\mv vn -> SLet VarMut mv (VExp $ TH.VarE vn)) mvs vns)
+            locally lvDataEnvVars (const mvs) $ locally lvDataReturning (const r) $ 
+                (tupP $ p:map TH.VarP vns,) . lets <$> makeLocalVarsStmt s'
+        SFun fs' <$> makeLocalVarsStmt s
+
+makeLocalVarsVStmtRet :: (MonadRefresh m, MonadReader LVData m) => VStmt -> m VStmt
+makeLocalVarsVStmtRet (VExp e) = return $ VExp e
+makeLocalVarsVStmtRet (VCall f e) = do
+    mvs <- views lvDataFunVars $ fromJust . M.lookup f
+    return $ VCall f $ tupE $ e:map TH.VarE mvs
+
+makeLocalVarsVStmt :: (MonadRefresh m, MonadReader LVData m) => VStmt -> (TH.Exp -> m Stmt) -> m Stmt
+makeLocalVarsVStmt (VExp e) c = c e
+makeLocalVarsVStmt (VCall f e) c = do
+    n <- makeName "rt"
+    rn <- makeName "r"
+    mvs <- views lvDataFunVars $ fromJust . M.lookup f
+    vns <- replicateM (length mvs) $ makeName "v"
+    s <- c $ TH.VarE rn
+    return $ SLet VarLet n (VCall f $ tupE $ e:map TH.VarE mvs) $ 
+        SCase (TH.VarE n) [(tupP $ map TH.VarP $ rn:vns, sBlock $ zipWith SAssign mvs (map (VExp . TH.VarE) vns) ++ [s])]
 
 -- Converting to tail calls
 
