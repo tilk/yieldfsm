@@ -9,12 +9,13 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Applicative hiding (many, some)
 import Control.Monad
+import Control.Monad.Trans(lift)
 import Prelude
 import Data.Void
 import Data.Char(isSpace)
 import qualified Data.Map.Strict as M
 
-type Parser = Parsec Void String
+type Parser = ParsecT Void String TH.Q
 
 isHSpace :: Char -> Bool
 isHSpace x = isSpace x && x /= '\n' && x /= '\r'
@@ -122,6 +123,14 @@ parseBlock = do
     lvl <- scn *> L.indentLevel <* singleSymbol "begin"
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
+parseForever :: Parser Stmt
+parseForever = do
+    lvl <- scn *> L.indentLevel <* singleSymbol "forever"
+    ss <- many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    f <- lift $ TH.newName "forever"
+    let scall = SRet $ VCall f $ TH.TupE []
+    return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
+
 parseCase :: Parser Stmt
 parseCase = do
     (lvl, e) <- parseHsFold (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "case") stringToHsExp
@@ -143,6 +152,7 @@ parseBasicStmt = parseVar
              <|> parseIf
              <|> parseCase
              <|> parseFun
+             <|> parseForever
              <|> parseBlock
              <|> parseNop
              <|> parseAssign
@@ -168,6 +178,6 @@ parseProg = prog <$> parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> (
                  <*> parseBasicStmt
     where prog = uncurry Prog
 
-runParseProg :: String -> Either (ParseErrorBundle String Void) Prog
-runParseProg = runParser parseProg ""
+runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
+runParseProg = runParserT parseProg ""
 

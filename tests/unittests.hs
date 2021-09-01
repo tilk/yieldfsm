@@ -76,24 +76,20 @@ ret call f ()
 [fsm|oscilAssignFSM :: (CP.HiddenClockResetEnable dom)
                     => CP.Signal dom () -> CP.Signal dom Bool
 inputs ()
-fun f ():
+forever
     var x = False
     emit x
     x = not x
     emit x
-    ret call f ()
-ret call f ()
 |]
 
 [fsm|oscilNestedFSM :: (CP.HiddenClockResetEnable dom)
                     => CP.Signal dom () -> CP.Signal dom Bool
 inputs ()
 var x = True
-fun f ():
+forever
     x = not x
     emit x
-    ret call f ()
-ret call f ()
 |]
 {-
 [fsm|oscilCallFSM :: (CP.HiddenClockResetEnable dom)
