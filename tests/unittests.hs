@@ -24,7 +24,7 @@ main :: IO ()
 main = defaultMain $ testGroup "." [ 
     testOscillator @CP.System "oscilAssign" oscilAssignFSM,
     testOscillator @CP.System "oscilNested" oscilNestedFSM,
-    --testOscillator @CP.System "oscilCall" oscilCallFSM,
+    testOscillator @CP.System "oscilCall" oscilCallFSM,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
@@ -91,7 +91,7 @@ forever
     x = not x
     emit x
 |]
-{-
+
 [fsm|oscilCallFSM :: (CP.HiddenClockResetEnable dom)
                     => CP.Signal dom () -> CP.Signal dom Bool
 inputs ()
@@ -105,7 +105,7 @@ fun g ():
     ret call g ()
 ret call g ()
 |]
--}
+
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
               => CP.Signal dom () -> CP.Signal dom Integer
 inputs ()

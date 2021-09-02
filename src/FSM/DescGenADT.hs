@@ -44,6 +44,10 @@ makeConNames nm = fst . foldl' f (M.empty, M.empty) where
 
 derivclause = TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT ''NFDataX]
 
+tupT [] = TH.TupleT 0
+tupT [t] = t
+tupT ts = foldl TH.AppT (TH.TupleT (length ts)) ts
+
 compileFSM :: FSM -> TH.Q [TH.Dec]
 compileFSM fsm = do
     let nm = TH.nameBase $ fsmName fsm
@@ -59,7 +63,7 @@ compileFSM fsm = do
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
         TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
     contDecls <- forM (M.assocs $ fsmConts fsm) $ \(n, cs) -> do
-        contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' (map ((b,) . TH.VarT) ns)
+        contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' [(b, tupT $ map TH.VarT ns)]
         let contTvars = map TH.PlainTV $ nub $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
     return $ TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
