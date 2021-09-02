@@ -23,7 +23,7 @@ mkFSM str = do
             TH.runIO $ hPutStrLn stderr $ show $ progName p
             p' <- deTailCall p
             TH.runIO $ hPutDoc stderr $ prettyProg p'
-            p'' <- makeLocalVars p'
+            p'' <- propagateConstants <$> makeLocalVars p'
             TH.runIO $ hPutDoc stderr $ prettyProg p''
             np <- lambdaLift p''
             TH.runIO $ hPutDoc stderr $ prettyNProg np
