@@ -23,7 +23,8 @@ countSlowOpt n (True:xs) = n:f xs where
 main :: IO ()
 main = defaultMain $ testGroup "." [ 
     testOscillator @CP.System "oscilAssign" oscilAssignFSM,
-    testOscillator @CP.System "oscilNested" oscilNestedFSM,
+    testOscillator @CP.System "oscilVar" oscilVarFSM,
+    testOscillator @CP.System "oscilVar2" oscilVar2FSM,
     testOscillator @CP.System "oscilCall" oscilCallFSM,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testCounter @CP.System "count" countFSM,
@@ -84,13 +85,22 @@ forever
     emit x
 |]
 
-[fsm|oscilNestedFSM :: (CP.HiddenClockResetEnable dom)
-                    => CP.Signal dom () -> CP.Signal dom Bool
+[fsm|oscilVarFSM :: (CP.HiddenClockResetEnable dom)
+                 => CP.Signal dom () -> CP.Signal dom Bool
 inputs ()
 var x = True
 forever
     x = not x
     emit x
+|]
+
+[fsm|oscilVar2FSM :: (CP.HiddenClockResetEnable dom)
+                 => CP.Signal dom () -> CP.Signal dom Bool
+inputs ()
+var x = False
+forever
+    emit x
+    x = not x
 |]
 
 [fsm|oscilCallFSM :: (CP.HiddenClockResetEnable dom)
