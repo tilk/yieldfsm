@@ -8,17 +8,15 @@ import FSM.Desc
 import Prelude
 import Control.Arrow
 
-stmt2dtree :: Stmt -> DecisionTree Transition
-stmt2dtree (SIf e s1 s2) = DTIf e (stmt2dtree s1) (stmt2dtree s2)
-stmt2dtree (SBlock ss) = stmts2dtree ss
-stmt2dtree (SLet VarLet n (VExp e) s) = DTLet (TH.VarP n) e (stmt2dtree s)
-stmt2dtree (SCase e cs) = DTCase e (map (id *** stmt2dtree) cs)
-
-stmts2dtree :: [Stmt] -> DecisionTree Transition
-stmts2dtree [SEmit e, SRet (VCall n ec)] = DTLeaf $ Transition e n ec
+stmt2dtree :: Maybe TH.Exp -> Stmt -> DecisionTree Transition
+stmt2dtree me       (SIf e s1 s2) = DTIf e (stmt2dtree me s1) (stmt2dtree me s2)
+stmt2dtree Nothing  (SBlock [SEmit e, s]) = stmt2dtree (Just e) s
+stmt2dtree me       (SLet VarLet n (VExp e) s) = DTLet (TH.VarP n) e (stmt2dtree me s)
+stmt2dtree me       (SCase e cs) = DTCase e (map (id *** stmt2dtree me) cs)
+stmt2dtree (Just e) (SRet (VCall n ec)) = DTLeaf $ Transition e n ec
 
 fun2state :: (TH.Pat, Stmt) -> FSMState
-fun2state (p, s) = FSMState p (stmt2dtree s)
+fun2state (p, s) = FSMState p (stmt2dtree Nothing s)
 
 nprog2desc (NProg n t ps is fs f1 e1 cs) = FSM { 
     fsmName = n,

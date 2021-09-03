@@ -105,11 +105,6 @@ refreshPat = runWriterT . f where
     f   (TH.SigP p t) = TH.SigP <$> f p <*> pure t
     f   (TH.ViewP e p) = TH.ViewP e <$> f p
 
-simpleStmt :: Stmt -> Bool
-simpleStmt SNop = True
-simpleStmt (SRet _) = True
-simpleStmt _ = False
-
 tupE :: [TH.Exp] -> TH.Exp
 tupE [x] = x
 tupE xs = TH.TupE . map Just $ xs
@@ -174,6 +169,14 @@ data CBData = CBData {
     cbDataName :: TH.Name
 }
 
+emittingStmt :: Stmt -> Bool
+emittingStmt (SBlock [SEmit _, _]) = True
+emittingStmt SNop = False
+emittingStmt (SRet _) = False
+emittingStmt (SIf _ st sf) = emittingStmt st || emittingStmt sf
+emittingStmt (SCase _ cs) = any (emittingStmt . snd) cs
+emittingStmt (SLet _ _ _ s) = emittingStmt s
+
 makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState FunMap m) => Stmt -> m Stmt
 makeCont s = do
     CBData fv n <- ask
@@ -190,7 +193,7 @@ cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
 cutBlocksStmt (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt (SBlock ss) s'
     cutBlocksStmt s s''
-cutBlocksStmt (SEmit e) s' | simpleStmt s' = 
+cutBlocksStmt (SEmit e) s' | not (emittingStmt s') = 
     return $ SBlock [SEmit e, s']
 cutBlocksStmt (SIf e st sf) s' = 
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
