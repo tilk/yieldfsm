@@ -192,14 +192,14 @@ cutBlocksStmt (SBlock (s:ss)) s' = do
     cutBlocksStmt s s''
 cutBlocksStmt (SEmit e) s' | simpleStmt s' = 
     return $ SBlock [SEmit e, s']
-cutBlocksStmt (SIf e st sf) s' | simpleStmt s' = 
+cutBlocksStmt (SIf e st sf) s' = 
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
-cutBlocksStmt (SCase e cs) s' | simpleStmt s' = 
+cutBlocksStmt (SCase e cs) s' = 
     SCase e <$> mapM cf cs where
         cf (p, s) = do
             (p', su) <- refreshPat p
             (p',) <$> cutBlocksStmt (renameStmt su s) s'
-cutBlocksStmt (SLet _ ln vs@(VExp _) s) s' | simpleStmt s' = do
+cutBlocksStmt (SLet _ ln vs@(VExp _) s) s' = do
     ln' <- refreshName ln
     SLet VarLet ln' vs <$> cutBlocksStmt (renameStmtSingle ln ln' s) s'
 cutBlocksStmt (SLet _ ln vs@(VCall _ _) s) s' = do
@@ -224,35 +224,45 @@ cutBlocks prog = do
 
 -- Eliminate epsilon transitions
 
-removeEpsilonStmt :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
-                     M.Map TH.Name (TH.Pat, Stmt) -> Stmt -> f Stmt
-removeEpsilonStmt _  s@SNop = return s
-removeEpsilonStmt _  s@(SEmit _) = return s
-removeEpsilonStmt fs   (SIf e st sf) = SIf e <$> removeEpsilonStmt fs st <*> removeEpsilonStmt fs sf
-removeEpsilonStmt fs   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt fs s
-removeEpsilonStmt fs   (SCase e cs) = SCase e <$> mapM cf cs where
-    cf (p, s) = (p,) <$> removeEpsilonStmt fs s
-removeEpsilonStmt fs s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom fs f >> return s
-removeEpsilonStmt fs   (SRet (VCall f e)) = do
-    (p', su) <- refreshPat p
-    SCase e <$> (return . (p',) <$> removeEpsilonStmt fs (renameStmt su s))
-    where
-    Just (p, s) = M.lookup f fs
-removeEpsilonStmt _ s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
+data REData = REData {
+    _reDataFunMap :: FunMap,
+    _reDataEmitted :: Bool
+}
 
-removeEpsilonFrom :: (MonadRefresh f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
-                     M.Map TH.Name (TH.Pat, Stmt) -> TH.Name -> f ()
-removeEpsilonFrom fs f = do
+$(makeLenses ''REData)
+
+removeEpsilonStmt :: (MonadRefresh f, MonadReader REData f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
+                     Stmt -> f Stmt
+removeEpsilonStmt s@SNop = return s
+removeEpsilonStmt s@(SEmit _) = return s
+removeEpsilonStmt   (SIf e st sf) = SIf e <$> removeEpsilonStmt st <*> removeEpsilonStmt sf
+removeEpsilonStmt   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt s
+removeEpsilonStmt   (SCase e cs) = SCase e <$> mapM cf cs where
+    cf (p, s) = (p,) <$> removeEpsilonStmt s
+--removeEpsilonStmt s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom f >> return s
+removeEpsilonStmt   (SBlock [SEmit e, s]) = (\s' -> SBlock [SEmit e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
+removeEpsilonStmt s@(SRet (VCall f e)) = do
+    em <- view reDataEmitted
+    if em then removeEpsilonFrom f >> return s
+    else do
+        (p, s') <- views reDataFunMap $ fromJust . M.lookup f
+        (p', su) <- refreshPat p
+        SCase e <$> (return . (p',) <$> removeEpsilonStmt (renameStmt su s'))
+removeEpsilonStmt s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
+
+removeEpsilonFrom :: (MonadRefresh f, MonadReader REData f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
+                     TH.Name -> f ()
+removeEpsilonFrom f = do
+    (p, s) <- views reDataFunMap $ fromJust . M.lookup f
     b <- gets (M.member f)
     unless b $ do
         modify $ M.insert f (p, SNop)
-        s' <- removeEpsilonStmt fs s
+        s' <- locally reDataEmitted (const False) $ removeEpsilonStmt s
         modify $ M.insert f (p, s')
-    where Just (p, s) = M.lookup f fs
 
 removeEpsilon :: MonadRefresh m => NProg -> m NProg
 removeEpsilon prog = do
-    fs' <- flip execStateT M.empty $ removeEpsilonFrom (nProgFuns prog) (nProgInit prog)
+    fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) False) $ removeEpsilonFrom (nProgInit prog)
     return $ prog { nProgFuns = fs' }
 
 -- Call graph calculation
