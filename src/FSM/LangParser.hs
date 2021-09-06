@@ -9,13 +9,38 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Applicative hiding (many, some)
 import Control.Monad
-import Control.Monad.Trans(lift)
+import Control.Monad.Reader
+import Control.Monad.Writer
+import Control.Lens hiding (noneOf)
 import Prelude
 import Data.Void
 import Data.Char(isSpace)
 import qualified Data.Map.Strict as M
 
-type Parser = ParsecT Void String TH.Q
+data PRData = PRData {
+    _prDataLoop :: Bool
+}
+
+prData :: PRData
+prData = PRData False
+
+data PWData = PWData {
+    _pwDataRet :: Bool
+}
+
+pwData :: PWData
+pwData = PWData False
+
+$(makeLenses ''PRData)
+$(makeLenses ''PWData)
+
+instance Semigroup PWData where
+    (PWData r1) <> (PWData r2) = PWData (r1 || r2)
+
+instance Monoid PWData where
+    mempty = pwData
+
+type Parser = ReaderT PRData (WriterT PWData (ParsecT Void String TH.Q))
 
 isHSpace :: Char -> Bool
 isHSpace x = isSpace x && x /= '\n' && x /= '\r'
@@ -100,7 +125,13 @@ parseEmit :: Parser Stmt
 parseEmit = SEmit <$> parseHsFoldSymbol "emit" stringToHsExp
 
 parseRet :: Parser Stmt
-parseRet = parseVStmt (\sc' -> L.symbol sc' "ret" >> return SRet)
+parseRet = mkRet =<< parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
+
+mkRet :: VStmt -> Parser Stmt
+mkRet vs = do
+    b <- view prDataLoop
+    scribe pwDataRet True
+    if b then error "Return in loops currently unsupported" else return $ SRet vs
 
 parseIf :: Parser Stmt
 parseIf = do
@@ -111,12 +142,18 @@ parseIf = do
 parseFun :: Parser Stmt
 parseFun = do
     (lvl, n, p) <- parseHsFoldColon (\sc' -> (,,) <$> L.indentLevel <* L.symbol sc' "fun" <*> parseName sc') stringToHsPat
-    s <- (L.indentGuard scn GT lvl *> parseStmt)
-    rest <- many (f <$> parseHsFoldColon (\sc' -> (,) <$> (L.indentGuard scn EQ lvl *> L.symbol sc' "fun" *> parseName sc')) stringToHsPat
-                    <*> (L.indentGuard scn GT lvl *> parseStmt))
+    s <- (L.indentGuard scn GT lvl *> parseFunBody)
+    rest <- locally prDataLoop (const False) $ many
+                 (f <$> parseHsFoldColon (\sc' -> (,) <$> (L.indentGuard scn EQ lvl *> L.symbol sc' "fun" *> parseName sc')) stringToHsPat
+                    <*> (L.indentGuard scn GT lvl *> parseFunBody))
     SFun (M.fromList $ (n, (p, s)):rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
     where
     f (n, p) s = (n, (p, s))
+
+parseFunBody :: Parser Stmt
+parseFunBody = do
+    (s, r) <- listening pwDataRet $ parseStmt
+    if r then return s else return $ SBlock [s, SRet $ VExp $ TH.TupE []]
 
 parseBlock :: Parser Stmt
 parseBlock = do
@@ -124,10 +161,10 @@ parseBlock = do
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
 parseForever :: Parser Stmt
-parseForever = do
+parseForever = censoring pwDataRet (const False) $ locally prDataLoop (const True) $ do
     lvl <- scn *> L.indentLevel <* singleSymbol "forever"
     ss <- many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
-    f <- lift $ TH.newName "forever"
+    f <- lift $ lift $ lift $ TH.newName "forever"
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
 
@@ -179,5 +216,5 @@ parseProg = prog <$> parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> (
     where prog = uncurry Prog
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
-runParseProg = runParserT parseProg ""
+runParseProg s = fmap fst <$> (runParserT (runWriterT (runReaderT parseProg prData)) "" s)
 

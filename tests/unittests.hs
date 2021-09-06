@@ -109,12 +109,9 @@ inputs ()
 var x = True
 fun n ():
     x = not x
-    ret ()
-fun g ():
+forever
     call n ()
     emit x
-    ret call g ()
-ret call g ()
 |]
 
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
