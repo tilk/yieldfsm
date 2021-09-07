@@ -1,3 +1,6 @@
+{-# LANGUAGE RankNTypes #-}
+module Main where
+
 import Prelude
 import qualified Clash.Prelude as CP
 import Test.Tasty
@@ -168,12 +171,12 @@ ret call f 0
 [fsm|countSlowOptVarFSM :: (CP.HiddenClockResetEnable dom) 
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 inputs b
-var x = -1
+var x = 0
 forever
-    x = x + 1
     if b:
         emit x
     emit x
+    x = x + 1
 |]
 
 [fsm|countSlowOptCallFSM :: (CP.HiddenClockResetEnable dom) 
