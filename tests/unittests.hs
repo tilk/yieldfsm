@@ -37,6 +37,8 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOpt" countSlowOptFSM,
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
+    testCounterEnMoore @CP.System "countEn" countEnFSM,
+    testCounterEnMoore @CP.System "countEnContinue" countEnContinueFSM,
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
     testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
@@ -190,6 +192,27 @@ fun f i:
     call e i
     ret call f (i+1)
 ret call f 0
+|]
+
+[fsm|countEnFSM :: (CP.HiddenClockResetEnable dom)
+                => CP.Signal dom Bool -> CP.Signal dom Integer
+inputs b
+var x = 0
+forever
+    emit x
+    if b:
+        x = x + 1
+|]
+
+[fsm|countEnContinueFSM :: (CP.HiddenClockResetEnable dom)
+                        => CP.Signal dom Bool -> CP.Signal dom Integer
+inputs b
+var x = 0
+forever
+    emit x
+    if not b:
+        continue
+    x = x + 1
 |]
 
 [fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom)

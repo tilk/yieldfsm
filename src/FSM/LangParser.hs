@@ -22,11 +22,11 @@ import qualified Data.Map.Strict as M
 
 data PRData = PRData {
     _prDataVars :: M.Map TH.Name VarKind,
-    _prDataLoop :: Bool
+    _prDataLoop :: Maybe TH.Name
 }
 
 prData :: PRData
-prData = PRData M.empty False
+prData = PRData M.empty Nothing
 
 data PWData = PWData {
     _pwDataRet :: Bool
@@ -177,9 +177,9 @@ parseRet = mkRet =<< parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
 
 mkRet :: VStmt -> Parser Stmt
 mkRet vs = do
-    b <- view prDataLoop
+    l <- view prDataLoop
     scribe pwDataRet True
-    if b then error "Return in loops currently unsupported" else return $ SRet vs
+    if l == Nothing then return $ SRet vs else error "Return in loops currently unsupported"
 
 parseIf :: Parser Stmt
 parseIf = do
@@ -191,7 +191,7 @@ parseFun :: Parser Stmt
 parseFun = do
     (lvl, n, p) <- parseHsFoldColon (\sc' -> (,,) <$> L.indentLevel <* L.symbol sc' "fun" <*> parseName sc') stringToHsPat
     first <- (L.indentGuard scn GT lvl *> parseFunBody n p)
-    rest <- locally prDataLoop (const False) $ many $ do
+    rest <- locally prDataLoop (const Nothing) $ many $ do
         (n', p') <- parseHsFoldColon (\sc' -> (,) <$> (L.indentGuard scn EQ lvl *> L.symbol sc' "fun" *> parseName sc')) stringToHsPat
         L.indentGuard scn GT lvl *> parseFunBody n' p'
     SFun (M.fromList $ first:rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
@@ -207,10 +207,10 @@ parseBlock = do
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
 parseForever :: Parser Stmt
-parseForever = censoring pwDataRet (const False) $ locally prDataLoop (const True) $ do
+parseForever = censoring pwDataRet (const False) $ do
     lvl <- scn *> L.indentLevel <* singleSymbol "forever"
-    ss <- many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
     f <- qlift $ TH.newName "forever"
+    ss <- locally prDataLoop (const $ Just f) $ many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
 
@@ -223,6 +223,14 @@ parseCase = do
 
 parseNop :: Parser Stmt
 parseNop = singleSymbol "nop" *> return SNop
+
+parseContinue :: Parser Stmt
+parseContinue = do
+    singleSymbol "continue"
+    l <- view prDataLoop
+    case l of
+        Nothing -> fail "Continue outside a loop"
+        Just i -> return $ SRet $ VCall i (TH.TupE [])
 
 parseCall :: Parser Stmt
 parseCall = (\vs -> SLet VarLet (TH.mkName "_") vs SNop) <$> parseHsFold (\sc' -> VCall <$> (L.symbol sc' "call" *> parseName sc')) stringToHsExp
@@ -240,6 +248,7 @@ parseBasicStmt = parseVar
              <|> parseNop
              <|> parseAssign
              <|> parseCall
+             <|> parseContinue
 
 mkStmt :: [Stmt] -> Stmt
 mkStmt [] = SNop
