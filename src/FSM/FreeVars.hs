@@ -7,7 +7,13 @@ import Prelude
 import Data.Maybe(maybe)
 import FSM.Lang
 
-data PatFV = PatFV { patBound :: (S.Set TH.Name), patFree :: (S.Set TH.Name) }
+class FreeVars a where
+    freeVars :: a -> S.Set TH.Name
+
+class FreeVarsPat a where
+    freeVarsPat :: a -> PatFV
+
+data PatFV = PatFV { patBound :: S.Set TH.Name, patFree :: S.Set TH.Name }
 
 patEmpty = PatFV S.empty S.empty
 patSingleton n = PatFV (S.singleton n) S.empty
@@ -18,95 +24,106 @@ patUnions = foldr patUnion patEmpty
 
 underPat s (PatFV s1 s2) = s2 `S.union` (s `S.difference` s1)
 
-freeVarsExpMaybe :: Maybe TH.Exp -> S.Set TH.Name
-freeVarsExpMaybe = maybe S.empty id . fmap freeVarsExp
+boundVars :: FreeVarsPat a => a -> S.Set TH.Name
+boundVars = patBound . freeVarsPat
 
-freeVarsExp :: TH.Exp -> S.Set TH.Name
-freeVarsExp (TH.VarE v) = S.singleton v
-freeVarsExp (TH.ConE _) = S.empty
-freeVarsExp (TH.LitE _) = S.empty
-freeVarsExp (TH.AppE e1 e2) = freeVarsExp e1 `S.union` freeVarsExp e2
-freeVarsExp (TH.AppTypeE e _ ) = freeVarsExp e
-freeVarsExp (TH.InfixE me1 e me2) = freeVarsExp e `S.union` freeVarsExpMaybe me1 `S.union` freeVarsExpMaybe me2
-freeVarsExp (TH.UInfixE e1 e e2) = freeVarsExp e `S.union` freeVarsExp e1 `S.union` freeVarsExp e2
-freeVarsExp (TH.ParensE e) = freeVarsExp e
-freeVarsExp (TH.LamE ps e) = freeVarsExp e `underPat` patUnions (map freeVarsPat ps)
-freeVarsExp (TH.LamCaseE ms) = S.unions $ map freeVarsMatch ms
-freeVarsExp (TH.TupE es) = S.unions $ map freeVarsExpMaybe es
-freeVarsExp (TH.UnboxedTupE es) = S.unions $ map freeVarsExpMaybe es
-freeVarsExp (TH.UnboxedSumE e _ _) = freeVarsExp e
-freeVarsExp (TH.CondE e e1 e2) = freeVarsExp e `S.union` freeVarsExp e1 `S.union` freeVarsExp e2
--- MultiIfE
--- LetE
--- CaseE
--- DoE
--- MDoE
--- CompE
--- ArithE
-freeVarsExp (TH.ListE es) = S.unions $ map freeVarsExp es
-freeVarsExp (TH.SigE e _) = freeVarsExp e
--- RecConE
--- RecUpdE
--- StaticE
--- UnboundVarE
-freeVarsExp (TH.LabelE _) = S.empty
+instance FreeVars a => FreeVars (Maybe a) where
+    freeVars = maybe S.empty id . fmap freeVars
 
-freeVarsFieldPat :: TH.FieldPat -> PatFV
+instance FreeVars TH.Type where
+    freeVars = const S.empty
+
+instance FreeVars TH.Exp where
+    freeVars (TH.VarE v) = S.singleton v
+    freeVars (TH.ConE _) = S.empty
+    freeVars (TH.LitE _) = S.empty
+    freeVars (TH.AppE e1 e2) = freeVars e1 `S.union` freeVars e2
+    freeVars (TH.AppTypeE e _ ) = freeVars e
+    freeVars (TH.InfixE me1 e me2) = freeVars e `S.union` freeVars me1 `S.union` freeVars me2
+    freeVars (TH.UInfixE e1 e e2) = freeVars e `S.union` freeVars e1 `S.union` freeVars e2
+    freeVars (TH.ParensE e) = freeVars e
+    freeVars (TH.LamE ps e) = freeVars e `underPat` patUnions (map freeVarsPat ps)
+    freeVars (TH.LamCaseE ms) = freeVars ms
+    freeVars (TH.TupE es) = freeVars es
+    freeVars (TH.UnboxedTupE es) = freeVars es
+    freeVars (TH.UnboxedSumE e _ _) = freeVars e
+    freeVars (TH.CondE e e1 e2) = freeVars e `S.union` freeVars e1 `S.union` freeVars e2
+    -- MultiIfE
+    -- LetE
+    -- CaseE
+    -- DoE
+    -- MDoE
+    -- CompE
+    -- ArithE
+    freeVars (TH.ListE es) = freeVars es
+    freeVars (TH.SigE e _) = freeVars e
+    -- RecConE
+    -- RecUpdE
+    -- StaticE
+    -- UnboundVarE
+    freeVars (TH.LabelE _) = S.empty
+
 freeVarsFieldPat (n, p) = freeVarsPat p
 
-freeVarsPat :: TH.Pat -> PatFV
-freeVarsPat (TH.LitP _) = patEmpty
-freeVarsPat (TH.VarP n) = patSingleton n
-freeVarsPat (TH.TupP ps) = patUnions $ map freeVarsPat ps
-freeVarsPat (TH.UnboxedTupP ps) = patUnions $ map freeVarsPat ps
-freeVarsPat (TH.UnboxedSumP p _ _) = freeVarsPat p
-freeVarsPat (TH.ConP _ ps) = patUnions $ map freeVarsPat ps
-freeVarsPat (TH.InfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
-freeVarsPat (TH.UInfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
-freeVarsPat (TH.ParensP p) = freeVarsPat p
-freeVarsPat (TH.TildeP p) = freeVarsPat p
-freeVarsPat (TH.BangP p) = freeVarsPat p
-freeVarsPat (TH.AsP n p) = freeVarsPat p `patUnion` patSingleton n
-freeVarsPat (TH.WildP) = patEmpty
-freeVarsPat (TH.RecP _ fps) = patUnions $ map freeVarsFieldPat fps
-freeVarsPat (TH.ListP ps) = patUnions $ map freeVarsPat ps
-freeVarsPat (TH.SigP p _) = freeVarsPat p
-freeVarsPat (TH.ViewP e p) = freeVarsPat p `patUnion` PatFV S.empty (freeVarsExp e)
+instance FreeVarsPat TH.Pat where
+    freeVarsPat (TH.LitP _) = patEmpty
+    freeVarsPat (TH.VarP n) = patSingleton n
+    freeVarsPat (TH.TupP ps) = freeVarsPat ps
+    freeVarsPat (TH.UnboxedTupP ps) = freeVarsPat ps
+    freeVarsPat (TH.UnboxedSumP p _ _) = freeVarsPat p
+    freeVarsPat (TH.ConP _ ps) = freeVarsPat ps
+    freeVarsPat (TH.InfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
+    freeVarsPat (TH.UInfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
+    freeVarsPat (TH.ParensP p) = freeVarsPat p
+    freeVarsPat (TH.TildeP p) = freeVarsPat p
+    freeVarsPat (TH.BangP p) = freeVarsPat p
+    freeVarsPat (TH.AsP n p) = freeVarsPat p `patUnion` patSingleton n
+    freeVarsPat (TH.WildP) = patEmpty
+    freeVarsPat (TH.RecP _ fps) = patUnions $ map freeVarsFieldPat fps
+    freeVarsPat (TH.ListP ps) = freeVarsPat ps
+    freeVarsPat (TH.SigP p _) = freeVarsPat p
+    freeVarsPat (TH.ViewP e p) = freeVarsPat p `patUnion` PatFV S.empty (freeVars e)
+
+instance FreeVars TH.Pat where
+    freeVars = patFree . freeVarsPat
 
 freeVarsDec :: TH.Dec -> PatFV
 freeVarsDec _ = undefined
 
-freeVarsBody :: TH.Body -> PatFV
-freeVarsBody (TH.NormalB e) = PatFV S.empty (freeVarsExp e)
-freeVarsBody (TH.GuardedB ges) = undefined
+instance FreeVarsPat TH.Body where
+    freeVarsPat (TH.NormalB e) = PatFV S.empty (freeVars e)
+    freeVarsPat (TH.GuardedB ges) = undefined
 
-freeVarsMatch :: TH.Match -> S.Set TH.Name
-freeVarsMatch (TH.Match p b ds) = undefined
+instance FreeVars TH.Match where
+    freeVars (TH.Match p b ds) = undefined
 
-freeVarsStmt :: TH.Stmt -> S.Set TH.Name
-freeVarsStmt (TH.BindS p e) = freeVarsExp e `underPat` freeVarsPat p
---freeVarsStmt (TH.LetS ds) = 
-freeVarsStmt (TH.NoBindS e) = freeVarsExp e
-freeVarsStmt (TH.ParS sss) = S.unions $ map (S.unions . map freeVarsStmt) sss
-freeVarsStmt (TH.RecS ss) = S.unions $ map freeVarsStmt ss
+instance FreeVars TH.Stmt where
+    freeVars (TH.BindS p e) = freeVars e `underPat` freeVarsPat p
+    --freeVars (TH.LetS ds) = 
+    freeVars (TH.NoBindS e) = freeVars e
+    freeVars (TH.ParS sss) = freeVars sss
+    freeVars (TH.RecS ss) = freeVars ss
 
-freeVarsVStmt :: VStmt -> S.Set TH.Name
-freeVarsVStmt (VExp e) = freeVarsExp e
-freeVarsVStmt (VCall n e) = freeVarsExp e
+instance FreeVars VStmt where
+    freeVars (VExp e) = freeVars e
+    freeVars (VCall n e) = freeVars e
 
-freeVarsLangStmt :: Stmt -> S.Set TH.Name
-freeVarsLangStmt (SLet _ v vs s) = freeVarsVStmt vs `S.union` (freeVarsLangStmt s `underPat` freeVarsPat (TH.VarP v))
-freeVarsLangStmt (SAssign v vs) = freeVarsVStmt vs
-freeVarsLangStmt (SEmit e) = freeVarsExp e
-freeVarsLangStmt (SRet vs) = freeVarsVStmt vs
-freeVarsLangStmt (SFun fs s) = freeVarsLangStmt s `S.union` S.unions (flip map (M.toList fs) $ \(_, (p, s)) -> freeVarsLangStmt s `underPat` freeVarsPat p)
-freeVarsLangStmt (SBlock ss) = S.unions $ map freeVarsLangStmt ss
-freeVarsLangStmt (SIf e s1 s2) = freeVarsExp e `S.union` freeVarsLangStmt s1 `S.union` freeVarsLangStmt s2
-freeVarsLangStmt (SCase e cs) = freeVarsExp e `S.union` S.unions (flip map cs $ \(p, s) -> freeVarsLangStmt s `underPat` freeVarsPat p)
-freeVarsLangStmt (SNop) = S.empty
+instance FreeVars Stmt where
+    freeVars (SLet _ v vs s) = freeVars vs `S.union` (freeVars s `underPat` freeVarsPat (TH.VarP v))
+    freeVars (SAssign v vs) = freeVars vs
+    freeVars (SEmit e) = freeVars e
+    freeVars (SRet vs) = freeVars vs
+    freeVars (SFun fs s) = freeVars s `S.union` S.unions (flip map (M.toList fs) $ \(_, (p, s)) -> freeVars s `underPat` freeVarsPat p)
+    freeVars (SBlock ss) = freeVars ss
+    freeVars (SIf e s1 s2) = freeVars e `S.union` freeVars s1 `S.union` freeVars s2
+    freeVars (SCase e cs) = freeVars e `S.union` S.unions (flip map cs $ \(p, s) -> freeVars s `underPat` freeVarsPat p)
+    freeVars (SNop) = S.empty
 
-freeVarsLangStmts :: [Stmt] -> S.Set TH.Name
-freeVarsLangStmts ss = S.unions $ map freeVarsLangStmt ss
+instance FreeVars a => FreeVars [a] where
+    freeVars ss = S.unions $ map freeVars ss
+
+instance FreeVarsPat a => FreeVarsPat [a] where
+    freeVarsPat ss = patUnions $ map freeVarsPat ss
 
 substName :: M.Map TH.Name TH.Exp -> TH.Name -> TH.Exp
 substName s n | Just e <- M.lookup n s = e

@@ -135,7 +135,7 @@ lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLift
 lambdaLiftStmt s@(SNop) = return s
 lambdaLiftStmt   (SFun fm s) = do
     fvs <- view llDataFreeVars
-    e <- forWithKeyM fm $ \n (p, s') -> (, S.elems $ freeVarsLangStmt s' `S.difference` fvs `underPat` freeVarsPat p) <$> refreshName n
+    e <- forWithKeyM fm $ \n (p, s') -> (, S.elems $ freeVars s' `S.difference` fvs `underPat` freeVarsPat p) <$> refreshName n
     locally llDataEnv (M.union e) $ do
         fm' <- mapWithKeyM processFun fm
         modify $ M.union $ M.mapKeys (fst . fromJust . flip M.lookup e) fm'
@@ -153,7 +153,7 @@ lambdaLiftVStmt    (VCall n e) = do
 
 lambdaLift :: MonadRefresh m => Prog -> m NProg
 lambdaLift prog = do
-    (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVarsLangStmt $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
+    (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVars $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
     case s of
         SRet (VCall f e) -> return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) fm f e M.empty
         _ -> do
@@ -180,7 +180,7 @@ emittingStmt (SLet _ _ _ s) = emittingStmt s
 makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState FunMap m) => Stmt -> m Stmt
 makeCont s = do
     CBData fv n <- ask
-    let vs = S.toList $ freeVarsLangStmt s `S.difference` fv
+    let vs = S.toList $ freeVars s `S.difference` fv
     n' <- refreshName n
     modify $ M.insert n' (tupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
@@ -219,7 +219,7 @@ cutBlocksStmt s s' = do
 
 cutBlocks :: MonadRefresh m => NProg -> m NProg
 cutBlocks prog = do
-    let fvs = freeVarsLangStmt $ SFun (nProgFuns prog) SNop
+    let fvs = freeVars $ SFun (nProgFuns prog) SNop
     fs' <- flip execStateT M.empty $ forM_ (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
@@ -436,13 +436,13 @@ data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VExp e'))) = do
     TCData cfn _ an fvs fn <- ask
-    let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
+    let vs = S.toList $ freeVars e' `S.difference` S.insert n fvs
     cn <- makeSeqName $ "C" ++ TH.nameBase f
     tell [ContData cn fn f n vs e' (ContTgtCont an)]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VCall f' e'))) = do
     TCData _ _ _ fvs fn <- ask
-    let vs = S.toList $ freeVarsExp e' `S.difference` S.insert n fvs
+    let vs = S.toList $ freeVars e' `S.difference` S.insert n fvs
     cn <- makeSeqName $ "C" ++ TH.nameBase f
     tell [ContData cn fn f n vs e' (ContTgtFun f')]
     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
@@ -456,7 +456,7 @@ makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " +
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
 makeTailCalls prog = evalUniqueT $ do
-    let fvs = freeVarsLangStmt $ SFun (nProgFuns prog) SNop
+    let fvs = freeVars $ SFun (nProgFuns prog) SNop
     (fsd, cds) <- runWriterT $ forM (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         if n `S.member` rfs
         then do

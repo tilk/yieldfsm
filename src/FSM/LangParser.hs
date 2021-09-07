@@ -4,6 +4,7 @@ module FSM.LangParser(runParseProg) where
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.Meta as HM
 import FSM.Lang
+import FSM.FreeVars
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -15,6 +16,7 @@ import Control.Lens hiding (noneOf)
 import Prelude
 import Data.Void
 import Data.Char(isSpace)
+import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
 data PRData = PRData {
@@ -34,6 +36,9 @@ pwData = PWData False
 
 $(makeLenses ''PRData)
 $(makeLenses ''PWData)
+
+boundVarsEnv :: FreeVarsPat a => a -> M.Map TH.Name VarKind
+boundVarsEnv = M.fromSet (const VarLet) . boundVars
 
 instance Semigroup PWData where
     (PWData r1) <> (PWData r2) = PWData (r1 || r2)
@@ -67,9 +72,15 @@ symbolic sc' = L.lexeme sc' . char
 ident :: Parser () -> Parser String
 ident sc' = L.lexeme sc' $ (:) <$> letterChar <*> many alphaNumChar
 
-e2m :: MonadFail m => Either String a -> m a
+qlift :: TH.Q a -> Parser a
+qlift = lift . lift . lift
+
+e2m :: FreeVars a => Either String a -> Parser a
 e2m (Left s) = fail s
-e2m (Right r) = return r
+e2m (Right r) = do
+    vm <- view prDataVars
+    forM_ (freeVars r `S.difference` M.keysSet vm) $ qlift . TH.reify
+    return r
 
 newlineOrEof :: Parser ()
 newlineOrEof = (newline *> return ()) <|> eof
@@ -86,19 +97,19 @@ stringToHsPat s = HM.toPat <$> HM.parseHsPat s
 stringToHsType :: String -> Either String TH.Type
 stringToHsType s = HM.toType <$> HM.parseHsType s
 
-parseHsFoldGen :: (Parser () -> Parser a) -> (Parser () -> Parser (b -> c)) -> (a -> Either String b) -> Parser c
+parseHsFoldGen :: FreeVars b => (Parser () -> Parser a) -> (Parser () -> Parser (b -> c)) -> (a -> Either String b) -> Parser c
 parseHsFoldGen rest pfx p = try (lookAhead (scn *> pfx scn)) *> L.lineFold scn (\sc' ->
     (($) <$> pfx sc' <*> (e2m =<< p <$> rest sc')) <* sc)
 
-parseHsFold :: (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFold :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
 parseHsFold = parseHsFoldGen (\sc' -> unwords <$> some (noneOf "\r\n") `sepBy1` try sc')
 
-parseHsFoldColon :: (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFoldColon :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
 parseHsFoldColon = parseHsFoldGen (\sc' -> unwords <$> some mysingle `sepBy1` try sc' <* single ':')
     where
     mysingle = try $ noneOf "\r\n" >>= \c -> return c <* (if c == ':' then notFollowedBy newline else return ())
 
-parseHsFoldSymbol :: String -> (String -> Either String a) -> Parser a
+parseHsFoldSymbol :: FreeVars a => String -> (String -> Either String a) -> Parser a
 parseHsFoldSymbol s = parseHsFold (\sc' -> L.symbol sc' s >> return id)
 
 --idStyle = haskellIdents { _styleReserved = HS.fromList ["nop", "var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
@@ -147,18 +158,16 @@ parseIf = do
 parseFun :: Parser Stmt
 parseFun = do
     (lvl, n, p) <- parseHsFoldColon (\sc' -> (,,) <$> L.indentLevel <* L.symbol sc' "fun" <*> parseName sc') stringToHsPat
-    s <- (L.indentGuard scn GT lvl *> parseFunBody)
-    rest <- locally prDataLoop (const False) $ many
-                 (f <$> parseHsFoldColon (\sc' -> (,) <$> (L.indentGuard scn EQ lvl *> L.symbol sc' "fun" *> parseName sc')) stringToHsPat
-                    <*> (L.indentGuard scn GT lvl *> parseFunBody))
-    SFun (M.fromList $ (n, (p, s)):rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
-    where
-    f (n, p) s = (n, (p, s))
+    first <- (L.indentGuard scn GT lvl *> parseFunBody n p)
+    rest <- locally prDataLoop (const False) $ many $ do
+        (n', p') <- parseHsFoldColon (\sc' -> (,) <$> (L.indentGuard scn EQ lvl *> L.symbol sc' "fun" *> parseName sc')) stringToHsPat
+        L.indentGuard scn GT lvl *> parseFunBody n' p'
+    SFun (M.fromList $ first:rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseFunBody :: Parser Stmt
-parseFunBody = do
-    (s, r) <- listening pwDataRet $ parseStmt
-    if r then return s else return $ SBlock [s, SRet $ VExp $ TH.TupE []]
+parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt))
+parseFunBody n p = do
+    (s, r) <- locally prDataVars (M.union $ boundVarsEnv p) $ listening pwDataRet $ parseStmt
+    return (n, (p, if r then s else SBlock [s, SRet $ VExp $ TH.TupE []]))
 
 parseBlock :: Parser Stmt
 parseBlock = do
@@ -169,7 +178,7 @@ parseForever :: Parser Stmt
 parseForever = censoring pwDataRet (const False) $ locally prDataLoop (const True) $ do
     lvl <- scn *> L.indentLevel <* singleSymbol "forever"
     ss <- many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
-    f <- lift $ lift $ lift $ TH.newName "forever"
+    f <- qlift $ TH.newName "forever"
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
 
@@ -214,11 +223,12 @@ parseVStmt :: (Parser () -> Parser (VStmt -> a)) -> Parser a
 parseVStmt pfx = parseHsFold (\sc' -> (.) <$> pfx sc' <*> (VCall <$> (L.symbol sc' "call" *> parseName sc') <|> return VExp)) stringToHsExp
 
 parseProg :: Parser Prog
-parseProg = prog <$> parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
-                 <*> many (parseHsFoldSymbol "param" stringToHsPat)
-                 <*> parseHsFoldSymbol "inputs" stringToHsPat
-                 <*> parseBasicStmt
-    where prog = uncurry Prog
+parseProg = do
+    (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
+    ps <- many (parseHsFoldSymbol "param" stringToHsPat)
+    is <- parseHsFoldSymbol "inputs" stringToHsPat
+    s <- locally prDataVars (M.union $ boundVarsEnv $ is:ps) $ parseBasicStmt
+    return $ Prog i t ps is s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
 runParseProg s = fmap fst <$> (runParserT (runWriterT (runReaderT parseProg prData)) "" s)
