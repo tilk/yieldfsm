@@ -321,27 +321,37 @@ isReturningStmt (SFun _ s) = isReturningStmt s
 
 -- Convert calls to returning functions to non-tail calls
 
+data DTData = DTData {
+    _dtDataFunction :: TH.Name,
+    _dtDataReturning :: S.Set TH.Name
+}
+
+$(makeLenses ''DTData)
+
 deTailCall :: MonadRefresh m => Prog -> m Prog
 deTailCall prog = do
-    s' <- deTailCallStmt S.empty $ progBody prog
+    s' <- flip runReaderT (DTData (TH.mkName "") S.empty) $ deTailCallStmt $ progBody prog
     return $ prog { progBody = s' }
 
-deTailCallStmt :: MonadRefresh m => S.Set TH.Name -> Stmt -> m Stmt
-deTailCallStmt _  s@(SNop) = return s
-deTailCallStmt _  s@(SEmit _) = return s
-deTailCallStmt rf   (SLet t n e s) = SLet t n e <$> deTailCallStmt rf s
-deTailCallStmt _  s@(SAssign _ _) = return s
-deTailCallStmt rf   (SBlock ss) = SBlock <$> mapM (deTailCallStmt rf) ss
-deTailCallStmt rf   (SIf e st sf) = SIf e <$> deTailCallStmt rf st <*> deTailCallStmt rf sf
-deTailCallStmt rf   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> deTailCallStmt rf s) cs
-deTailCallStmt _  s@(SRet (VExp _)) = return s
-deTailCallStmt rf s@(SRet (VCall f e))
-    | f `S.member` rf = do
+deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt -> m Stmt
+deTailCallStmt s@(SNop) = return s
+deTailCallStmt s@(SEmit _) = return s
+deTailCallStmt   (SLet t n e s) = SLet t n e <$> deTailCallStmt s
+deTailCallStmt s@(SAssign _ _) = return s
+deTailCallStmt   (SBlock ss) = SBlock <$> mapM deTailCallStmt ss
+deTailCallStmt   (SIf e st sf) = SIf e <$> deTailCallStmt st <*> deTailCallStmt sf
+deTailCallStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> deTailCallStmt s) cs
+deTailCallStmt s@(SRet (VExp _)) = return s
+deTailCallStmt s@(SRet (VCall f e)) = do
+    rf <- view dtDataReturning
+    f' <- view dtDataFunction
+    if f `S.member` rf && f /= f'
+    then do
         n <- refreshName f
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
-    | otherwise = return s
-deTailCallStmt rf   (SFun fs s) = SFun <$> mapM (\(p, s') -> (p,) <$> deTailCallStmt rf' s') fs <*> deTailCallStmt rf' s
-    where rf' = updateRetFuns fs rf
+    else return s
+deTailCallStmt   (SFun fs s) = locally dtDataReturning (updateRetFuns fs) $
+    SFun <$> mapWithKeyM (\f (p, s') -> locally dtDataFunction (const f) $ (p,) <$> deTailCallStmt s') fs <*> deTailCallStmt s
 
 -- Make mutable variables local
 

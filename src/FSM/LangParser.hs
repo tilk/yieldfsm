@@ -210,12 +210,32 @@ parseBlock = do
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
 parseForever :: Parser Stmt
-parseForever = censoring pwDataRet (const False) $ do
+parseForever = do
     lvl <- scn *> L.indentLevel <* singleSymbolColon "forever"
     f <- qlift $ TH.newName "forever"
-    ss <- locally prDataLoop (const $ Just f) $ many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    ss <- censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
+        many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
+
+parseWhile :: Parser Stmt
+parseWhile = do
+    (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "while") stringToHsExp
+    f <- qlift $ TH.newName "while"
+    ss <- censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
+        many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    return $ SFun (M.singleton f (TH.TupP [], SIf e (SBlock $ ss ++ [SRet $ VCall f $ TH.TupE []]) (SRet $ VExp $ TH.TupE [])))
+                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+
+parseDoWhile :: Parser Stmt
+parseDoWhile = do
+    lvl <- scn *> L.indentLevel <* singleSymbolColon "do"
+    f <- qlift $ TH.newName "do"
+    ss <- censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
+        many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    e <- parseHsFold (\sc' -> return id <* L.symbol sc' "while") stringToHsExp
+    return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [SIf e (SRet $ VCall f $ TH.TupE []) (SRet $ VExp $ TH.TupE [])]))
+                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
 
 parseCase :: Parser Stmt
 parseCase = do
@@ -252,6 +272,8 @@ parseBasicStmt = parseVar
              <|> parseAssign
              <|> parseCall
              <|> parseContinue
+             <|> parseWhile
+             <|> parseDoWhile
 
 mkStmt :: [Stmt] -> Stmt
 mkStmt [] = SNop
