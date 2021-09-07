@@ -10,7 +10,7 @@ data VStmt = VExp TH.Exp
            | VCall TH.Name TH.Exp
     deriving Show
 
-data VarKind = VarLet | VarMut deriving Show
+data VarKind = VarLet | VarMut deriving (Show, Eq)
 
 data Stmt = SLet VarKind TH.Name VStmt Stmt
           | SAssign TH.Name VStmt

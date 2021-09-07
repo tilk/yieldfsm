@@ -18,11 +18,12 @@ import Data.Char(isSpace)
 import qualified Data.Map.Strict as M
 
 data PRData = PRData {
+    _prDataVars :: M.Map TH.Name VarKind,
     _prDataLoop :: Bool
 }
 
 prData :: PRData
-prData = PRData False
+prData = PRData M.empty False
 
 data PWData = PWData {
     _pwDataRet :: Bool
@@ -111,15 +112,19 @@ parseName sc' = TH.mkName <$> ident sc'
 parseVar :: Parser Stmt
 parseVar = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "var" *> parseName sc' <* symbolic sc' '='))
-    SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
+    locally prDataVars (M.insert i VarMut) $ SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseAssign :: Parser Stmt
-parseAssign = uncurry SAssign <$> parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
+parseAssign = do
+    (i, vs) <- parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
+    vm <- view prDataVars
+    unless (M.lookup i vm == Just VarMut) $ fail $ "Invalid assignment target " ++ TH.nameBase i
+    return $ SAssign i vs
 
 parseLet :: Parser Stmt
 parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
-    SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
+    locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseEmit :: Parser Stmt
 parseEmit = SEmit <$> parseHsFoldSymbol "emit" stringToHsExp
