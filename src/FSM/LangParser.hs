@@ -149,6 +149,9 @@ parseHsFoldSymbol s = parseHsFold (\sc' -> L.symbol sc' s >> return id)
 singleSymbol :: String -> Parser ()
 singleSymbol s = ssymbol s *> newlineOrEof
 
+singleSymbolColon :: String -> Parser ()
+singleSymbolColon s = ssymbol s *> single ':' *> newlineOrEof
+
 parseName :: Parser () -> Parser TH.Name
 parseName sc' = TH.mkName <$> ident sc'
 
@@ -185,7 +188,7 @@ parseIf :: Parser Stmt
 parseIf = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "if") stringToHsExp
     SIf e <$> (L.indentGuard scn GT lvl *> parseStmt)
-          <*> ((try (L.indentGuard scn EQ lvl *> singleSymbol "else") *> L.indentGuard scn GT lvl *> parseStmt) <|> return SNop)
+          <*> ((try (L.indentGuard scn EQ lvl *> singleSymbolColon "else") *> L.indentGuard scn GT lvl *> parseStmt) <|> return SNop)
 
 parseFun :: Parser Stmt
 parseFun = do
@@ -203,12 +206,12 @@ parseFunBody n p = do
 
 parseBlock :: Parser Stmt
 parseBlock = do
-    lvl <- scn *> L.indentLevel <* singleSymbol "begin"
+    lvl <- scn *> L.indentLevel <* singleSymbolColon "begin"
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
 parseForever :: Parser Stmt
 parseForever = censoring pwDataRet (const False) $ do
-    lvl <- scn *> L.indentLevel <* singleSymbol "forever"
+    lvl <- scn *> L.indentLevel <* singleSymbolColon "forever"
     f <- qlift $ TH.newName "forever"
     ss <- locally prDataLoop (const $ Just f) $ many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
     let scall = SRet $ VCall f $ TH.TupE []
@@ -267,7 +270,7 @@ parseProg :: Parser Prog
 parseProg = do
     (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
     ps <- many (parseHsFoldSymbol "param" stringToHsPat)
-    is <- parseHsFoldSymbol "inputs" stringToHsPat
+    is <- parseHsFoldSymbol "input" stringToHsPat
     s <- locally prDataVars (M.union $ boundVarsEnv $ is:ps) $ parseBasicStmt
     return $ Prog i t ps is s
 
