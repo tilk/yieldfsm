@@ -2,6 +2,7 @@
 module FSM.LangParser(runParseProg) where
 
 import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.Exts as HE
 import qualified Language.Haskell.Meta as HM
 import FSM.Lang
 import FSM.FreeVars
@@ -88,14 +89,45 @@ newlineOrEof = (newline *> return ()) <|> eof
 ssymbol :: String -> Parser String
 ssymbol s = (try $ scn *> symbol s) <?> s
 
+myDefaultParseMode :: HE.ParseMode
+myDefaultParseMode = HE.defaultParseMode
+  {HE.parseFilename = []
+  ,HE.baseLanguage = HE.Haskell2010
+  ,HE.extensions = map HE.EnableExtension myDefaultExtensions
+  }
+
+myDefaultExtensions :: [HE.KnownExtension]
+myDefaultExtensions = [
+    HE.PostfixOperators,
+    HE.QuasiQuotes,
+    HE.UnicodeSyntax,
+    HE.PatternSignatures,
+    HE.MagicHash,
+    HE.ForeignFunctionInterface,
+    HE.TemplateHaskell,
+    HE.RankNTypes,
+    HE.MultiParamTypeClasses,
+    HE.RecursiveDo,
+    HE.TypeApplications,
+    HE.DataKinds]
+
+parseHsType :: String -> Either String (HE.Type HE.SrcSpanInfo)
+parseHsType = HM.parseResultToEither . HE.parseTypeWithMode myDefaultParseMode
+
+parseHsExp :: String -> Either String (HE.Exp HE.SrcSpanInfo)
+parseHsExp = HM.parseResultToEither . HE.parseExpWithMode myDefaultParseMode
+
+parseHsPat :: String -> Either String (HE.Pat HE.SrcSpanInfo)
+parseHsPat = HM.parseResultToEither . HE.parsePatWithMode myDefaultParseMode
+
 stringToHsExp :: String -> Either String TH.Exp
-stringToHsExp s = HM.toExp <$> HM.parseHsExp s
+stringToHsExp s = HM.toExp <$> parseHsExp s
 
 stringToHsPat :: String -> Either String TH.Pat
-stringToHsPat s = HM.toPat <$> HM.parseHsPat s
+stringToHsPat s = HM.toPat <$> parseHsPat s
 
 stringToHsType :: String -> Either String TH.Type
-stringToHsType s = HM.toType <$> HM.parseHsType s
+stringToHsType s = HM.toType <$> parseHsType s
 
 parseHsFoldGen :: FreeVars b => (Parser () -> Parser a) -> (Parser () -> Parser (b -> c)) -> (a -> Either String b) -> Parser c
 parseHsFoldGen rest pfx p = try (lookAhead (scn *> pfx scn)) *> L.lineFold scn (\sc' ->
