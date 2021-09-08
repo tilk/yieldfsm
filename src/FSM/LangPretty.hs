@@ -1,41 +1,44 @@
-module FSM.LangPretty(prettyProg, prettyNProg) where
+module FSM.LangPretty(prettyProgHPJ, prettyNProgHPJ) where
 
 import FSM.Lang
-import Prelude
-import Data.Text.Prettyprint.Doc
+import Prelude hiding ((<>))
+import Language.Haskell.TH.PprLib
+import qualified Text.PrettyPrint as HPJ
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 
-prettyKeyword :: String -> Doc ann
-prettyKeyword s = pretty s
+prettyKeyword :: String -> Doc
+prettyKeyword s = text s
 
-prettyTH :: TH.Ppr a => a -> Doc ann
-prettyTH n = pretty $ TH.pprint n
-
-prettyStmt :: Stmt -> Doc ann
+prettyStmt :: Stmt -> Doc
 prettyStmt SNop = prettyKeyword "nop"
-prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> prettyTH n <+> prettyKeyword "=" <+> prettyVStmt vs, prettyStmt s]
+prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> TH.ppr n <+> prettyKeyword "=" <+> prettyVStmt vs, prettyStmt s]
     where
     kw VarLet = "let"
     kw VarMut = "var"
-prettyStmt (SAssign n vs) = prettyTH n <+> prettyKeyword "=" <+> prettyVStmt vs
-prettyStmt (SEmit e) = prettyKeyword "emit" <+> prettyTH e
+prettyStmt (SAssign n vs) = TH.ppr n <+> prettyKeyword "=" <+> prettyVStmt vs
+prettyStmt (SEmit e) = prettyKeyword "emit" <+> TH.ppr e
 prettyStmt (SRet vs) = prettyKeyword "ret" <+> prettyVStmt vs
 prettyStmt (SFun fs s) = vcat $ map f (M.toList fs) ++ [prettyStmt s]
-    where f (n, (p, s')) = nest 4 $ prettyKeyword "fun" <+> prettyTH n <+> prettyTH p <> prettyKeyword ":" <> line <> prettyStmt s'
-prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> prettyTH e <> prettyKeyword ":", indent 4 (prettyStmt st), prettyKeyword "else:", indent 4 (prettyStmt sf)]
+    where f (n, (p, s')) = vcat [prettyKeyword "fun" <+> TH.ppr n <+> TH.ppr p <> prettyKeyword ":", nest 4 $ prettyStmt s']
+prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> TH.ppr e <> prettyKeyword ":", nest 4 (prettyStmt st), prettyKeyword "else:", nest 4 (prettyStmt sf)]
 prettyStmt (SBlock ss) = vcat (map prettyStmt ss)
-prettyStmt (SCase e cs) = vcat [prettyKeyword "case" <+> prettyTH e, vcat (map f cs)]
-    where f (p, s) = vcat [prettyKeyword "|" <+> prettyTH p <> prettyKeyword ":", indent 4 $ prettyStmt s]
+prettyStmt (SCase e cs) = vcat [prettyKeyword "case" <+> TH.ppr e, vcat (map f cs)]
+    where f (p, s) = vcat [prettyKeyword "|" <+> TH.ppr p <> prettyKeyword ":", nest 4 $ prettyStmt s]
 
-prettyVStmt :: VStmt -> Doc ann
-prettyVStmt (VExp e) = prettyTH e
-prettyVStmt (VCall n e) = prettyKeyword "call" <+> prettyTH n <+> prettyTH e
+prettyVStmt :: VStmt -> Doc
+prettyVStmt (VExp e) = TH.ppr e
+prettyVStmt (VCall n e) = prettyKeyword "call" <+> TH.ppr n <+> TH.ppr e
 
-prettyNProg :: NProg -> Doc ann
-prettyNProg np = prettyKeyword "input" <+> prettyTH (nProgInputs np) <> line
-    <> prettyStmt (SFun (nProgFuns np) (SRet (VCall (nProgInit np) (nProgInitParam np)))) <> line
+prettyNProg :: NProg -> Doc
+prettyNProg np = vcat [prettyKeyword "input" <+> TH.ppr (nProgInputs np), prettyStmt (SFun (nProgFuns np) (SRet (VCall (nProgInit np) (nProgInitParam np))))]
 
-prettyProg :: Prog -> Doc ann
-prettyProg np = prettyKeyword "input" <+> prettyTH (progInputs np) <> line
-    <> prettyStmt (progBody np) <> line
+prettyProg :: Prog -> Doc
+prettyProg np = vcat [prettyKeyword "input" <+> TH.ppr (progInputs np), prettyStmt (progBody np)]
+
+prettyNProgHPJ :: NProg -> HPJ.Doc
+prettyNProgHPJ = to_HPJ_Doc . prettyNProg
+
+prettyProgHPJ :: Prog -> HPJ.Doc
+prettyProgHPJ = to_HPJ_Doc . prettyProg
+

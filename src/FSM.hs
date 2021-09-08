@@ -8,8 +8,8 @@ import FSM.DescGenADT
 import FSM.LangProcess
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.Quote as THQ
+import Text.PrettyPrint as HPJ
 import Control.Monad.State
-import Data.Text.Prettyprint.Doc.Render.Text
 import Prelude
 import Text.Megaparsec
 import System.IO
@@ -22,17 +22,17 @@ mkFSM str = do
             TH.runIO $ hPutStrLn stderr ""
             TH.runIO $ hPutStrLn stderr $ show $ progName p
             p' <- deTailCall p
-            TH.runIO $ hPutDoc stderr $ prettyProg p'
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- propagateConstants <$> makeLocalVars p'
-            TH.runIO $ hPutDoc stderr $ prettyProg p''
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p''
             np <- lambdaLift p''
-            TH.runIO $ hPutDoc stderr $ prettyNProg np
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np
             np0 <- cutBlocks np
-            TH.runIO $ hPutDoc stderr $ prettyNProg np0
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np0
             np' <- makeTailCalls np0
-            TH.runIO $ hPutDoc stderr $ prettyNProg np'
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
             np'' <- removeEpsilon np'
-            TH.runIO $ hPutDoc stderr $ prettyNProg np''
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
             ret <- compileFSM (nprog2desc np'')
             TH.runIO $ hFlush stderr
             return ret
