@@ -80,6 +80,9 @@ refreshName n = makeName $ TH.nameBase n
 refreshNameWithPrefix :: MonadRefresh m => String -> TH.Name -> m TH.Name
 refreshNameWithPrefix p n = makeName $ p ++ TH.nameBase n
 
+refreshSeqNameWithPrefix :: (MonadUnique m, MonadRefresh m) => String -> TH.Name -> m TH.Name
+refreshSeqNameWithPrefix p n = makeSeqName $ p ++ TH.nameBase n
+
 refreshPat :: MonadRefresh m => TH.Pat -> m (TH.Pat, M.Map TH.Name TH.Name)
 refreshPat = runWriterT . f where
     f p@(TH.LitP _) = return p
@@ -471,7 +474,7 @@ makeTailCalls prog = evalUniqueT $ do
         if n `S.member` rfs
         then do
             cfn <- makeName "c"
-            ctn <- refreshNameWithPrefix "CT" n
+            ctn <- refreshSeqNameWithPrefix "CT" n
             an <- refreshNameWithPrefix "ap" n
             s' <- flip runReaderT (TCData cfn ctn an fvs n) $ makeTailCallsStmt s
             return $ (Just (ctn, an), (n, (tupP [p, TH.VarP cfn], s')))
