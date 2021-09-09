@@ -39,6 +39,7 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
     testCounterEnMoore @CP.System "countEn" countEnFSM,
     testCounterEnMoore @CP.System "countEnContinue" countEnContinueFSM,
+    testCounterEnMoore @CP.System "countEnWhile" countEnWhileFSM,
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
     testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
@@ -212,6 +213,17 @@ forever:
     emit x
     if not b:
         continue
+    x = x + 1
+|]
+
+[fsm|countEnWhileFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    do:
+        emit x
+    while not b
     x = x + 1
 |]
 

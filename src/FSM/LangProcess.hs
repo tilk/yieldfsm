@@ -427,12 +427,15 @@ makeLocalVarsVStmt (VCall f e) c = do
 -- Converting to tail calls
 
 data TCData = TCData {
-    tcDataCont :: TH.Name,
-    tcDataType :: TH.Name,
-    tcDataApply :: TH.Name,
-    tcDataFreeVars :: S.Set TH.Name,
-    tcDataName :: TH.Name
+    _tcDataCont :: TH.Name,
+    _tcDataType :: TH.Name,
+    _tcDataApply :: TH.Name,
+    _tcDataFreeVars :: S.Set TH.Name,
+    _tcDataReturning :: S.Set TH.Name,
+    _tcDataName :: TH.Name
 }
+
+$(makeLenses ''TCData)
 
 data ContData = ContData {
     contDataConName :: TH.Name,
@@ -447,23 +450,30 @@ data ContData = ContData {
 data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
-makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VExp e'))) = do
-    TCData cfn _ an fvs fn <- ask
-    let vs = S.toList $ freeVars e' `S.difference` S.insert n fvs
+makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
+    TCData cfn _ an fvs rfs fn <- ask
+    let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
     cn <- makeSeqName $ "C" ++ TH.nameBase f
-    tell [ContData cn fn f n vs e' (ContTgtCont an)]
-    return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
-makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet (VCall f' e'))) = do
-    TCData _ _ _ fvs fn <- ask
-    let vs = S.toList $ freeVars e' `S.difference` S.insert n fvs
-    cn <- makeSeqName $ "C" ++ TH.nameBase f
-    tell [ContData cn fn f n vs e' (ContTgtFun f')]
-    return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
-makeTailCallsStmt   (SLet VarLet n (VExp e) s) = SLet VarLet n (VExp e) <$> makeTailCallsStmt s -- TODO freevars
+    case vst of
+        VCall f' e' 
+            | f' `S.notMember` rfs -> do
+                tell [ContData cn fn f n vs e' (ContTgtFun f')]
+                return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
+        VExp e' -> do
+            tell [ContData cn fn f n vs e' (ContTgtCont an)]
+            return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
+makeTailCallsStmt   (SLet VarLet n (VExp e) s) = locally tcDataFreeVars (S.delete n) $ SLet VarLet n (VExp e) <$> makeTailCallsStmt s
 makeTailCallsStmt   (SIf e st sf) = SIf e <$> makeTailCallsStmt st <*> makeTailCallsStmt sf
 makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTailCallsStmt s) cs
-makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> asks tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> asks tcDataCont))
-makeTailCallsStmt s@(SRet (VCall _ _)) = return s
+makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> view tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> view tcDataCont))
+makeTailCallsStmt s@(SRet (VCall f e)) = do
+    r <- S.member f <$> view tcDataReturning
+    if not r then return s
+    else do
+        b <- (f ==) <$> view tcDataName
+        unless b $ error "unsupported tail call"
+        cfn <- view tcDataCont
+        return $ SRet $ VCall f $ tupE [e, TH.VarE cfn]
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
 makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
 
@@ -476,10 +486,10 @@ makeTailCalls prog = evalUniqueT $ do
             cfn <- makeName "c"
             ctn <- refreshSeqNameWithPrefix "CT" n
             an <- refreshNameWithPrefix "ap" n
-            s' <- flip runReaderT (TCData cfn ctn an fvs n) $ makeTailCallsStmt s
+            s' <- flip runReaderT (TCData cfn ctn an fvs rfs n) $ makeTailCallsStmt s
             return $ (Just (ctn, an), (n, (tupP [p, TH.VarP cfn], s')))
         else do
-            s' <- flip runReaderT (TCData (error "cfn") (error "ctn") (error "an") fvs n) $ makeTailCallsStmt s
+            s' <- flip runReaderT (TCData (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
             return $ (Nothing, (n, (p, s')))
     let cdmap = M.fromListWith (++) $ map (contDataCalled &&& return) cds
     let rfsd = map (fromJust *** id) . filter (isJust . fst) $ fsd
