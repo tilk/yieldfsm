@@ -303,4 +303,40 @@ forever:
         i = i - 1
     while i /= 0
 |]
+{-
+[fsm|countUpDownWhileCallFSM :: (CP.HiddenClockResetEnable dom)
+                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+param m
+input ()
+fun e i:
+    emit i
+var i = 0
+forever:
+    do:
+        call e i
+        i = i + 1
+    while i /= m
+    do:
+        call e i
+        i = i - 1
+    while i /= 0
+|]
 
+[fsm|countUpDownWhileSlowFSM :: (CP.HiddenClockResetEnable dom)
+                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+param m
+input ()
+var i = 0
+forever:
+    do:
+        emit i
+        emit i
+        i = i + 1
+    while i /= m
+    do:
+        emit i
+        emit i
+        i = i - 1
+    while i /= 0
+|]
+-}
