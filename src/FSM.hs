@@ -22,16 +22,22 @@ mkFSM str = do
             TH.runIO $ hPutStrLn stderr ""
             TH.runIO $ hPutStrLn stderr $ show $ progName p
             p' <- deTailCall p
+            TH.runIO $ hPutStrLn stderr $ "deTailCall:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- propagateConstants <$> makeLocalVars p'
+            TH.runIO $ hPutStrLn stderr $ "makeLocalVars:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p''
             np <- lambdaLift p''
+            TH.runIO $ hPutStrLn stderr $ "lambdaLift:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np
             np0 <- cutBlocks np
+            TH.runIO $ hPutStrLn stderr $ "cutBlocks:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np0
             np' <- makeTailCalls np0
+            TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
             np'' <- removeEpsilon np'
+            TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
             ret <- compileFSM (nprog2desc np'')
             TH.runIO $ hFlush stderr
