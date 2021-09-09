@@ -245,7 +245,6 @@ removeEpsilonStmt   (SIf e st sf) = SIf e <$> removeEpsilonStmt st <*> removeEps
 removeEpsilonStmt   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt s
 removeEpsilonStmt   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt s
---removeEpsilonStmt s@(SBlock [SEmit _, SRet (VCall f _)]) = removeEpsilonFrom f >> return s
 removeEpsilonStmt   (SBlock [SEmit e, s]) = (\s' -> SBlock [SEmit e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
 removeEpsilonStmt s@(SRet (VCall f e)) = do
     em <- view reDataEmitted
