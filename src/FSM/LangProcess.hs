@@ -429,6 +429,7 @@ makeLocalVarsVStmt (VCall f e) c = do
 -- Converting to tail calls
 
 data TCData = TCData {
+    _tcDataProgName :: String,
     _tcDataCont :: TH.Name,
     _tcDataType :: TH.Name,
     _tcDataApply :: TH.Name,
@@ -453,9 +454,9 @@ data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
-    TCData cfn _ an fvs rfs fn <- ask
+    TCData name cfn _ an fvs rfs fn <- ask
     let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
-    cn <- makeSeqName $ "C" ++ TH.nameBase f
+    cn <- makeSeqName $ "C" ++ name ++ TH.nameBase f
     case vst of
         VCall f' e' 
             | f' `S.notMember` rfs -> do
@@ -486,12 +487,12 @@ makeTailCalls prog = evalUniqueT $ do
         if n `S.member` rfs
         then do
             cfn <- makeName "c"
-            ctn <- refreshSeqNameWithPrefix "CT" n
+            ctn <- refreshSeqNameWithPrefix ("CT" ++ name) n
             an <- refreshNameWithPrefix "ap" n
-            s' <- flip runReaderT (TCData cfn ctn an fvs rfs n) $ makeTailCallsStmt s
+            s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n) $ makeTailCallsStmt s
             return $ (Just (ctn, an), (n, (tupP [p, TH.VarP cfn], s')))
         else do
-            s' <- flip runReaderT (TCData (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
+            s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
             return $ (Nothing, (n, (p, s')))
     let cdmap = M.fromListWith (++) $ map (contDataCalled &&& return) cds
     let rfsd = map (fromJust *** id) . filter (isJust . fst) $ fsd
@@ -500,6 +501,7 @@ makeTailCalls prog = evalUniqueT $ do
     let fs' = M.fromList $ apfs ++ map snd fsd
     return $ prog { nProgFuns = fs', nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
+    name = TH.nameBase $ nProgName prog
     rfs = returningFuns (nProgFuns prog) S.empty
     apf cdmap ((_ctn, an), (n, (_p, _s))) 
         | Just cds <- M.lookup n cdmap = do
