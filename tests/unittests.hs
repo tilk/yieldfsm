@@ -43,7 +43,8 @@ main = defaultMain $ testGroup "." [
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
     testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
-    testCounterUpDown @CP.System "countUpDown" countUpDownFSM]
+    testCounterUpDown @CP.System "countUpDown" countUpDownFSM,
+    testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM]
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= take 100 (cycle [False, True])
@@ -285,5 +286,21 @@ fun g i:
     else:
         ret call g (i-1)
 ret call f 0
+|]
+
+[fsm|countUpDownWhileFSM :: (CP.HiddenClockResetEnable dom)
+                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+param m
+input ()
+var i = 0
+forever:
+    do:
+        emit i
+        i = i + 1
+    while i /= m
+    do:
+        emit i
+        i = i - 1
+    while i /= 0
 |]
 
