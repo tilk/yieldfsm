@@ -232,6 +232,7 @@ cutBlocks prog = do
 
 data REData = REData {
     _reDataFunMap :: FunMap,
+    _reDataInputVars :: S.Set TH.Name,
     _reDataEmitted :: Bool
 }
 
@@ -247,10 +248,12 @@ removeEpsilonStmt   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt s
 removeEpsilonStmt   (SBlock [SEmit e, s]) = (\s' -> SBlock [SEmit e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
 removeEpsilonStmt s@(SRet (VCall f e)) = do
+    (p, s') <- views reDataFunMap $ fromJust . M.lookup f
     em <- view reDataEmitted
-    if em then removeEpsilonFrom f >> return s
+    ivs <- view reDataInputVars
+    b <- gets (M.member f)
+    if em && (b || emittingStmt s' || not (S.null $ S.intersection ivs $ freeVars s')) then removeEpsilonFrom f >> return s
     else do
-        (p, s') <- views reDataFunMap $ fromJust . M.lookup f
         (p', su) <- refreshPat p
         SCase e <$> (return . (p',) <$> removeEpsilonStmt (renameStmt su s'))
 removeEpsilonStmt s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
@@ -267,7 +270,7 @@ removeEpsilonFrom f = do
 
 removeEpsilon :: MonadRefresh m => NProg -> m NProg
 removeEpsilon prog = do
-    fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) False) $ removeEpsilonFrom (nProgInit prog)
+    fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) (boundVars $ nProgInputs prog) False) $ removeEpsilonFrom (nProgInit prog)
     return $ prog { nProgFuns = fs' }
 
 -- Call graph calculation
