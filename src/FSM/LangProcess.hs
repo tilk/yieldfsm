@@ -15,6 +15,7 @@ import Data.Key(mapWithKeyM, forWithKeyM)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
+import Data.Graph(stronglyConnComp, flattenSCC)
 --import qualified Language.Haskell.TH.Syntax as THS
 
 saturateSet :: Ord k => (k -> S.Set k) -> S.Set k -> S.Set k
@@ -452,6 +453,26 @@ data ContData = ContData {
 
 data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
 
+data Partition a = Partition {
+    partitionMap :: M.Map a Int,
+    partitionSets :: M.Map Int (S.Set a)
+} deriving Show
+
+partitionLookup :: Ord a => a -> Partition a -> Int
+partitionLookup k = fromJust . M.lookup k . partitionMap
+
+tailCallSCC :: FunMap -> Partition TH.Name
+tailCallSCC fs = Partition pMap pSets
+    where
+    pMap = M.unions $ (\(i, is) -> map (`M.singleton` i) is) =<< sccs
+    pSets = M.fromList $ map (id *** S.fromList) sccs
+    sccs = zip [0..] $ map flattenSCC $ stronglyConnComp graph
+    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (M.keys fs) ++) $ map edgeToGr $ callGraph fs
+    edgeToGr e | cgEdgeTail e = M.singleton (cgEdgeSrc e) (S.singleton $ cgEdgeDst e)
+               | otherwise = M.empty
+    funToGr n = M.singleton n S.empty
+    toSCC (n, ns) = (n, n, S.toList ns)
+
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
     TCData name cfn _ an fvs rfs fn <- ask
@@ -482,29 +503,34 @@ makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " +
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
 makeTailCalls prog = evalUniqueT $ do
-    let fvs = freeVars $ SFun (nProgFuns prog) SNop
-    (fsd, cds) <- runWriterT $ forM (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
+    partInfo <- fmap (M.map fromJust . M.filter isJust) $ forM (partitionSets part) $ \ns -> do
+        let n = S.findMin ns
         if n `S.member` rfs
         then do
-            cfn <- makeName "c"
             ctn <- refreshSeqNameWithPrefix ("CT" ++ name) n
             an <- refreshNameWithPrefix "ap" n
-            s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n) $ makeTailCallsStmt s
-            return $ (Just (ctn, an), (n, (tupP [p, TH.VarP cfn], s')))
-        else do
-            s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
-            return $ (Nothing, (n, (p, s')))
-    let cdmap = M.fromListWith (++) $ map (contDataCalled &&& return) cds
-    let rfsd = map (fromJust *** id) . filter (isJust . fst) $ fsd
-    apfs <- mapM (apf cdmap) rfsd
-    cdefs <- mapM (cdef cdmap) rfsd
-    let fs' = M.fromList $ apfs ++ map snd fsd
-    return $ prog { nProgFuns = fs', nProgConts = M.unions cdefs `M.union` nProgConts prog }
+            return $ Just (ctn, an)
+        else return Nothing
+    (fsd, cds) <- runWriterT $ forM (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
+        case M.lookup (partitionLookup n part) partInfo of
+            Just (ctn, an) -> do
+                cfn <- makeName "c"
+                s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n) $ makeTailCallsStmt s
+                return (n, (tupP [p, TH.VarP cfn], s'))
+            Nothing -> do
+                s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
+                return (n, (p, s'))
+    let cdmap = M.fromListWith (++) $ map (flip partitionLookup part . contDataCalled &&& return) cds
+    apfs <- mapM (apf cdmap) $ M.toList partInfo
+    cdefs <- mapM (cdef cdmap) $ M.toList partInfo
+    return $ prog { nProgFuns = M.fromList $ apfs ++ fsd, nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
+    fvs = freeVarsFunMap $ nProgFuns prog
+    part = tailCallSCC $ nProgFuns prog
     name = TH.nameBase $ nProgName prog
     rfs = returningFuns (nProgFuns prog) S.empty
-    apf cdmap ((_ctn, an), (n, (_p, _s))) 
-        | Just cds <- M.lookup n cdmap = do
+    apf cdmap (pid, (_ctn, an))
+        | Just cds <- M.lookup pid cdmap = do
             rn <- makeName "r"
             cfn <- makeName "c"
             cs <- forM cds $ \cd -> case contDataTgt cd of
@@ -517,8 +543,8 @@ makeTailCalls prog = evalUniqueT $ do
                         SLet VarLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
             return (an, (tupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
         | otherwise = return (an, (tupP [], SNop)) -- will be cleaned up anyway
-    cdef cdmap ((ctn, _an), (n, _)) 
-        | Just cds <- M.lookup n cdmap = do
+    cdef cdmap (pid, (ctn, _an))
+        | Just cds <- M.lookup pid cdmap = do
             cs <- forM cds $ \cd -> case contDataTgt cd of
                 ContTgtFun _ ->
                     return (contDataConName cd, contDataVars cd)

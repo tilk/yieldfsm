@@ -30,6 +30,9 @@ boundVars = patBound . freeVarsPat
 instance FreeVars a => FreeVars (Maybe a) where
     freeVars = maybe S.empty id . fmap freeVars
 
+freeVarsFunMap :: FunMap -> S.Set TH.Name
+freeVarsFunMap = S.unions . map (\(_, (p, s)) -> freeVars s `underPat` freeVarsPat p) . M.toList
+
 instance FreeVars TH.Type where
     freeVars = const S.empty
 
@@ -113,7 +116,7 @@ instance FreeVars Stmt where
     freeVars (SAssign v vs) = freeVars vs
     freeVars (SEmit e) = freeVars e
     freeVars (SRet vs) = freeVars vs
-    freeVars (SFun fs s) = freeVars s `S.union` S.unions (flip map (M.toList fs) $ \(_, (p, s)) -> freeVars s `underPat` freeVarsPat p)
+    freeVars (SFun fs s) = freeVars s `S.union` freeVarsFunMap fs
     freeVars (SBlock ss) = freeVars ss
     freeVars (SIf e s1 s2) = freeVars e `S.union` freeVars s1 `S.union` freeVars s2
     freeVars (SCase e cs) = freeVars e `S.union` S.unions (flip map cs $ \(p, s) -> freeVars s `underPat` freeVarsPat p)
