@@ -429,30 +429,6 @@ makeLocalVarsVStmt (VCall f e) c = do
 
 -- Converting to tail calls
 
-data TCData = TCData {
-    _tcDataProgName :: String,
-    _tcDataCont :: TH.Name,
-    _tcDataType :: TH.Name,
-    _tcDataApply :: TH.Name,
-    _tcDataFreeVars :: S.Set TH.Name,
-    _tcDataReturning :: S.Set TH.Name,
-    _tcDataName :: TH.Name
-}
-
-$(makeLenses ''TCData)
-
-data ContData = ContData {
-    contDataConName :: TH.Name,
-    contDataCaller :: TH.Name,
-    contDataCalled :: TH.Name,
-    contDataResName :: TH.Name,
-    contDataVars :: [TH.Name],
-    contDataExp :: TH.Exp,
-    contDataTgt :: ContTgt
-}
-
-data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
-
 data Partition a = Partition {
     partitionMap :: M.Map a Int,
     partitionSets :: M.Map Int (S.Set a)
@@ -473,9 +449,34 @@ tailCallSCC fs = Partition pMap pSets
     funToGr n = M.singleton n S.empty
     toSCC (n, ns) = (n, n, S.toList ns)
 
+data TCData = TCData {
+    _tcDataProgName :: String,
+    _tcDataCont :: TH.Name,
+    _tcDataType :: TH.Name,
+    _tcDataApply :: TH.Name,
+    _tcDataFreeVars :: S.Set TH.Name,
+    _tcDataReturning :: S.Set TH.Name,
+    _tcDataName :: TH.Name,
+    _tcDataPartition :: Partition TH.Name
+}
+
+$(makeLenses ''TCData)
+
+data ContData = ContData {
+    contDataConName :: TH.Name,
+    contDataCaller :: TH.Name,
+    contDataCalled :: TH.Name,
+    contDataResName :: TH.Name,
+    contDataVars :: [TH.Name],
+    contDataExp :: TH.Exp,
+    contDataTgt :: ContTgt
+}
+
+data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
+
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
-    TCData name cfn _ an fvs rfs fn <- ask
+    TCData name cfn _ an fvs rfs fn _ <- ask
     let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
     cn <- makeSeqName $ "C" ++ name ++ TH.nameBase f
     case vst of
@@ -494,8 +495,9 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
     r <- S.member f <$> view tcDataReturning
     if not r then return s
     else do
-        b <- (f ==) <$> view tcDataName
-        unless b $ error "unsupported tail call"
+        part <- view tcDataPartition
+        b <- flip partitionLookup part <$> view tcDataName
+        unless (b == partitionLookup f part) $ error "unsupported tail call"
         cfn <- view tcDataCont
         return $ SRet $ VCall f $ tupE [e, TH.VarE cfn]
 makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
@@ -515,10 +517,10 @@ makeTailCalls prog = evalUniqueT $ do
         case M.lookup (partitionLookup n part) partInfo of
             Just (ctn, an) -> do
                 cfn <- makeName "c"
-                s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n) $ makeTailCallsStmt s
+                s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n part) $ makeTailCallsStmt s
                 return (n, (tupP [p, TH.VarP cfn], s'))
             Nothing -> do
-                s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n) $ makeTailCallsStmt s
+                s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n part) $ makeTailCallsStmt s
                 return (n, (p, s'))
     let cdmap = M.fromListWith (++) $ map (flip partitionLookup part . contDataCalled &&& return) cds
     apfs <- mapM (apf cdmap) $ M.toList partInfo

@@ -44,7 +44,8 @@ main = defaultMain $ testGroup "." [
     testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
     testCounterUpDown @CP.System "countUpDown" countUpDownFSM,
-    testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM]
+    testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM,
+    testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM]
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= take 100 (cycle [False, True])
@@ -68,6 +69,10 @@ main = defaultMain $ testGroup "." [
     testCounterUpDown name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
         CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
+    testCounterUpDownSlow :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+    testCounterUpDownSlow name machine = TH.testProperty name $ H.property $ do
+        m <- H.forAll $ Gen.integral $ Range.constant 1 100
+        CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (dup $ cycle $ [0..m-1] ++ [m,m-1..1])
 
 [fsm|oscilLiftFSM :: (CP.HiddenClockResetEnable dom)
                   => CP.Signal dom () -> CP.Signal dom Bool
@@ -321,7 +326,7 @@ forever:
         i = i - 1
     while i /= 0
 |]
-
+-}
 [fsm|countUpDownWhileSlowFSM :: (CP.HiddenClockResetEnable dom)
                       => Integer -> CP.Signal dom () -> CP.Signal dom Integer
 param m
@@ -339,4 +344,4 @@ forever:
         i = i - 1
     while i /= 0
 |]
--}
+
