@@ -164,6 +164,30 @@ lambdaLift prog = do
             f <- refreshName $ TH.mkName "init"
             return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) (M.insert f (tupP [], s) fm) f (tupE []) M.empty
 
+-- Refreshing function names
+
+refreshFunctionsVStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> VStmt -> m VStmt
+refreshFunctionsVStmt _ (VExp e) = return $ VExp e
+refreshFunctionsVStmt m (VCall f e) = return $ VCall (fromJust $ M.lookup f m) e
+
+refreshFunctionsStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> Stmt -> m Stmt
+refreshFunctionsStmt _ SNop = return SNop
+refreshFunctionsStmt _ (SEmit e) = return $ SEmit e
+refreshFunctionsStmt m (SRet vs) = SRet <$> refreshFunctionsVStmt m vs
+refreshFunctionsStmt m (SAssign n vs) = SAssign n <$> refreshFunctionsVStmt m vs
+refreshFunctionsStmt m (SBlock ss) = SBlock <$> mapM (refreshFunctionsStmt m) ss
+refreshFunctionsStmt m (SIf e st sf) = SIf e <$> refreshFunctionsStmt m st <*> refreshFunctionsStmt m sf
+refreshFunctionsStmt m (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> refreshFunctionsStmt m s) cs
+refreshFunctionsStmt m (SLet t ln vs s) = SLet t ln <$> refreshFunctionsVStmt m vs <*> refreshFunctionsStmt m s
+refreshFunctionsStmt m (SFun fs s) = do
+    m' <- (`M.union` m) <$> (forWithKeyM fs $ \f _ -> refreshName f)
+    SFun <$> (M.fromList <$> forM (M.toList fs) (\(f, (p, s')) ->  (fromJust $ M.lookup f m', ) . (p,) <$> refreshFunctionsStmt m' s')) <*> refreshFunctionsStmt m' s
+
+refreshFunctions :: MonadRefresh m => Prog -> m Prog
+refreshFunctions prog = do
+    s <- refreshFunctionsStmt M.empty $ progBody prog
+    return $ prog { progBody = s }
+
 -- Sorta-kinda CPS transformation
 
 -- TODO: fix free vars handling
@@ -284,8 +308,14 @@ data CGEdge = CGEdge {
 
 type CG = [CGEdge]
 
-callGraph :: FunMap -> CG
-callGraph fs = M.toList fs >>= \(n, (_, s)) -> callGraphStmt n s
+callGraph :: Stmt -> CG
+callGraph s = callGraphStmt (TH.mkName "") s
+
+callGraphFlat :: FunMap -> CG
+callGraphFlat fs = callGraphFunMap (TH.mkName "") fs SNop
+
+callGraphFunMap :: TH.Name -> FunMap -> Stmt -> CG
+callGraphFunMap n fs s = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s') `mplus` callGraphStmt n s
 
 callGraphStmt :: TH.Name -> Stmt -> CG
 callGraphStmt _ SNop = mzero
@@ -296,7 +326,7 @@ callGraphStmt n (SRet vs) = callGraphVStmt n True vs
 callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
 callGraphStmt n (SIf _ st sf) = callGraphStmt n st `mplus` callGraphStmt n sf
 callGraphStmt n (SCase _ cs) = callGraphStmt n =<< map snd cs
-callGraphStmt _ s@(SFun _ _) = error $ "callGraphStmt statement not in lambda-lifted form: " ++ show s
+callGraphStmt n (SFun fs s) = callGraphFunMap n fs s
 
 callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
 callGraphVStmt _ _ (VExp _) = mzero
@@ -304,14 +334,25 @@ callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
 
 -- Returning functions calculation
 
-returningFuns :: FunMap -> S.Set TH.Name -> S.Set TH.Name
-returningFuns fs rf = saturateSet (flip (M.findWithDefault S.empty) tailCalled) directRet
-    where
-    directRet = S.fromList [n | (n, (_, s)) <- M.toList fs, isReturningStmt s ] `S.union` rf
-    tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail $ callGraph fs
+directRet :: Stmt -> S.Set TH.Name
+directRet SNop = S.empty
+directRet (SEmit _) = S.empty
+directRet (SLet _ _ _ s) = directRet s
+directRet (SAssign _ _) = S.empty
+directRet (SRet _) = S.empty
+directRet (SBlock ss) = S.unions $ map directRet ss
+directRet (SIf _ st sf) = directRet st `S.union` directRet sf
+directRet (SCase _ cs) = S.unions $ map (directRet . snd) cs
+directRet (SFun fs s) = directRet s `S.union` S.fromList [n | (n, (_, s')) <- M.toList fs, isReturningStmt s']
+                                    `S.union` (S.unions $ map (directRet . snd . snd) $ M.toList fs)
 
-updateRetFuns :: FunMap -> S.Set TH.Name -> S.Set TH.Name
-updateRetFuns fs rf = returningFuns fs (rf `S.difference` M.keysSet fs)
+returningFuns :: Stmt -> S.Set TH.Name
+returningFuns s = saturateSet (flip (M.findWithDefault S.empty) tailCalled) $ directRet s
+    where
+    tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail $ callGraph s
+
+returningFunsFlat :: FunMap -> S.Set TH.Name
+returningFunsFlat = returningFuns . flip SFun SNop
 
 isReturningStmt :: Stmt -> Bool
 isReturningStmt SNop = False
@@ -336,7 +377,7 @@ $(makeLenses ''DTData)
 
 deTailCall :: MonadRefresh m => Prog -> m Prog
 deTailCall prog = do
-    s' <- flip runReaderT (DTData (TH.mkName "") S.empty) $ deTailCallStmt $ progBody prog
+    s' <- flip runReaderT (DTData (TH.mkName "") (returningFuns $ progBody prog)) $ deTailCallStmt $ progBody prog
     return $ prog { progBody = s' }
 
 deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt -> m Stmt
@@ -356,7 +397,7 @@ deTailCallStmt s@(SRet (VCall f e)) = do
         n <- refreshName f
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
     else return s
-deTailCallStmt   (SFun fs s) = locally dtDataReturning (updateRetFuns fs) $
+deTailCallStmt   (SFun fs s) =
     SFun <$> mapWithKeyM (\f (p, s') -> locally dtDataFunction (const f) $ (p,) <$> deTailCallStmt s') fs <*> deTailCallStmt s
 
 -- Make mutable variables local
@@ -373,7 +414,7 @@ $(makeLenses ''LVData)
 
 makeLocalVars :: MonadRefresh m => Prog -> m Prog
 makeLocalVars prog = do
-    s' <- flip runReaderT (LVData False S.empty [] [] M.empty) $ makeLocalVarsStmt $ progBody prog
+    s' <- flip runReaderT (LVData False (returningFuns $ progBody prog) [] [] M.empty) $ makeLocalVarsStmt $ progBody prog
     return $ prog { progBody = s' }
 
 makeLocalVarsStmt :: (MonadRefresh m, MonadReader LVData m) => Stmt -> m Stmt
@@ -400,7 +441,7 @@ makeLocalVarsStmt (SRet vs) = do
     mvsOf (VCall f _) = views lvDataFunVars $ fromJust . M.lookup f
 makeLocalVarsStmt (SFun fs s) = do
     mvs0 <- view lvDataMutVars -- TODO deduce actual variable usage
-    locally lvDataFunVars (M.map (const mvs0) fs `M.union`) $ locally lvDataRetFuns (updateRetFuns fs) $ do
+    locally lvDataFunVars (M.map (const mvs0) fs `M.union`) $ do
         fs' <- forWithKeyM fs $ \f (p, s') -> do
             r <- views lvDataRetFuns $ S.member f
             mvs <- views lvDataFunVars $ fromJust . M.lookup f
@@ -443,7 +484,7 @@ tailCallSCC fs = Partition pMap pSets
     pMap = M.unions $ (\(i, is) -> map (`M.singleton` i) is) =<< sccs
     pSets = M.fromList $ map (id *** S.fromList) sccs
     sccs = zip [0..] $ map flattenSCC $ stronglyConnComp graph
-    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (M.keys fs) ++) $ map edgeToGr $ callGraph fs
+    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (M.keys fs) ++) $ map edgeToGr $ callGraphFlat fs
     edgeToGr e | cgEdgeTail e = M.singleton (cgEdgeSrc e) (S.singleton $ cgEdgeDst e)
                | otherwise = M.empty
     funToGr n = M.singleton n S.empty
@@ -530,7 +571,7 @@ makeTailCalls prog = evalUniqueT $ do
     fvs = freeVarsFunMap $ nProgFuns prog
     part = tailCallSCC $ nProgFuns prog
     name = TH.nameBase $ nProgName prog
-    rfs = returningFuns (nProgFuns prog) S.empty
+    rfs = returningFunsFlat (nProgFuns prog)
     apf cdmap (pid, (_ctn, an))
         | Just cds <- M.lookup pid cdmap = do
             rn <- makeName "r"

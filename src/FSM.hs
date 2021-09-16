@@ -21,7 +21,7 @@ mkFSM str = do
         Right p -> do
             TH.runIO $ hPutStrLn stderr ""
             TH.runIO $ hPutStrLn stderr $ show $ progName p
-            p' <- deTailCall p
+            p' <- deTailCall =<< refreshFunctions p
             TH.runIO $ hPutStrLn stderr $ "deTailCall:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- propagateConstants <$> makeLocalVars p'
