@@ -45,7 +45,9 @@ main = defaultMain $ testGroup "." [
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
     testCounterUpDown @CP.System "countUpDown" countUpDownFSM,
     testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM,
-    testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM]
+    testCounterUpDown @CP.System "countUpDownWhileCall" countUpDownWhileCallFSM,
+    testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM,
+    testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM]
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= take 100 (cycle [False, True])
@@ -308,7 +310,7 @@ forever:
         i = i - 1
     while i /= 0
 |]
-{-
+
 [fsm|countUpDownWhileCallFSM :: (CP.HiddenClockResetEnable dom)
                       => Integer -> CP.Signal dom () -> CP.Signal dom Integer
 param m
@@ -326,7 +328,7 @@ forever:
         i = i - 1
     while i /= 0
 |]
--}
+
 [fsm|countUpDownWhileSlowFSM :: (CP.HiddenClockResetEnable dom)
                       => Integer -> CP.Signal dom () -> CP.Signal dom Integer
 param m
@@ -341,6 +343,26 @@ forever:
     do:
         emit i
         emit i
+        i = i - 1
+    while i /= 0
+|]
+
+[fsm|countUpDownWhileSlowCallFSM :: (CP.HiddenClockResetEnable dom)
+                                 => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+param m
+input ()
+fun e i:
+    emit i
+var i = 0
+forever:
+    do:
+        call e i
+        call e i
+        i = i + 1
+    while i /= m
+    do:
+        call e i
+        call e i
         i = i - 1
     while i /= 0
 |]
