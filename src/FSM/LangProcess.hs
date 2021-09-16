@@ -131,7 +131,7 @@ lambdaLiftStmt   (SLet t ln vs s) = do
     ln' <- refreshName ln
     SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmtSingle ln ln' s)
 lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
-lambdaLiftStmt s@(SEmit _) = return s
+lambdaLiftStmt s@(SYield _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
 lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
 lambdaLiftStmt   (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
@@ -172,7 +172,7 @@ refreshFunctionsVStmt m (VCall f e) = return $ VCall (fromJust $ M.lookup f m) e
 
 refreshFunctionsStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> Stmt -> m Stmt
 refreshFunctionsStmt _ SNop = return SNop
-refreshFunctionsStmt _ (SEmit e) = return $ SEmit e
+refreshFunctionsStmt _ (SYield e) = return $ SYield e
 refreshFunctionsStmt m (SRet vs) = SRet <$> refreshFunctionsVStmt m vs
 refreshFunctionsStmt m (SAssign n vs) = SAssign n <$> refreshFunctionsVStmt m vs
 refreshFunctionsStmt m (SBlock ss) = SBlock <$> mapM (refreshFunctionsStmt m) ss
@@ -198,7 +198,7 @@ data CBData = CBData {
 }
 
 emittingStmt :: Stmt -> Bool
-emittingStmt (SBlock [SEmit _, _]) = True
+emittingStmt (SBlock [SYield _, _]) = True
 emittingStmt SNop = False
 emittingStmt (SRet _) = False
 emittingStmt (SIf _ st sf) = emittingStmt st || emittingStmt sf
@@ -221,8 +221,8 @@ cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
 cutBlocksStmt (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt (SBlock ss) s'
     cutBlocksStmt s s''
-cutBlocksStmt (SEmit e) s' | not (emittingStmt s') = 
-    return $ SBlock [SEmit e, s']
+cutBlocksStmt (SYield e) s' | not (emittingStmt s') = 
+    return $ SBlock [SYield e, s']
 cutBlocksStmt (SIf e st sf) s' = 
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
 cutBlocksStmt (SCase e cs) s' = 
@@ -266,12 +266,12 @@ $(makeLenses ''REData)
 removeEpsilonStmt :: (MonadRefresh f, MonadReader REData f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
                      Stmt -> f Stmt
 removeEpsilonStmt s@SNop = return s
-removeEpsilonStmt s@(SEmit _) = return s
+removeEpsilonStmt s@(SYield _) = return s
 removeEpsilonStmt   (SIf e st sf) = SIf e <$> removeEpsilonStmt st <*> removeEpsilonStmt sf
 removeEpsilonStmt   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt s
 removeEpsilonStmt   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt s
-removeEpsilonStmt   (SBlock [SEmit e, s]) = (\s' -> SBlock [SEmit e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
+removeEpsilonStmt   (SBlock [SYield e, s]) = (\s' -> SBlock [SYield e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
 removeEpsilonStmt s@(SRet (VCall f e)) = do
     (p, s') <- views reDataFunMap $ fromJust . M.lookup f
     em <- view reDataEmitted
@@ -319,7 +319,7 @@ callGraphFunMap n fs s = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s')
 
 callGraphStmt :: TH.Name -> Stmt -> CG
 callGraphStmt _ SNop = mzero
-callGraphStmt _ (SEmit _) = mzero
+callGraphStmt _ (SYield _) = mzero
 callGraphStmt n (SLet _ _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
 callGraphStmt _ (SAssign _ _) = mzero
 callGraphStmt n (SRet vs) = callGraphVStmt n True vs
@@ -336,7 +336,7 @@ callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
 
 directRet :: Stmt -> S.Set TH.Name
 directRet SNop = S.empty
-directRet (SEmit _) = S.empty
+directRet (SYield _) = S.empty
 directRet (SLet _ _ _ s) = directRet s
 directRet (SAssign _ _) = S.empty
 directRet (SRet _) = S.empty
@@ -356,7 +356,7 @@ returningFunsFlat = returningFuns . flip SFun SNop
 
 isReturningStmt :: Stmt -> Bool
 isReturningStmt SNop = False
-isReturningStmt (SEmit _) = False
+isReturningStmt (SYield _) = False
 isReturningStmt (SLet _ _ _ s) = isReturningStmt s
 isReturningStmt (SAssign _ _) = False
 isReturningStmt (SBlock ss) = or $ isReturningStmt <$> ss
@@ -382,7 +382,7 @@ deTailCall prog = do
 
 deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt -> m Stmt
 deTailCallStmt s@(SNop) = return s
-deTailCallStmt s@(SEmit _) = return s
+deTailCallStmt s@(SYield _) = return s
 deTailCallStmt   (SLet t n e s) = SLet t n e <$> deTailCallStmt s
 deTailCallStmt s@(SAssign _ _) = return s
 deTailCallStmt   (SBlock ss) = SBlock <$> mapM deTailCallStmt ss
@@ -419,7 +419,7 @@ makeLocalVars prog = do
 
 makeLocalVarsStmt :: (MonadRefresh m, MonadReader LVData m) => Stmt -> m Stmt
 makeLocalVarsStmt SNop = return SNop
-makeLocalVarsStmt (SEmit e) = return $ SEmit e
+makeLocalVarsStmt (SYield e) = return $ SYield e
 makeLocalVarsStmt (SBlock ss) = SBlock <$> mapM makeLocalVarsStmt ss
 makeLocalVarsStmt (SIf e st sf) = SIf e <$> makeLocalVarsStmt st <*> makeLocalVarsStmt sf
 makeLocalVarsStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeLocalVarsStmt s) cs
@@ -547,7 +547,7 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
         unless (b == partitionLookup f part) $ error "unsupported tail call"
         cfn <- view tcDataCont
         return $ SRet $ VCall f $ tupE [e, TH.VarE cfn]
-makeTailCallsStmt   (SBlock [SEmit e,s]) = (\s' -> SBlock [SEmit e, s']) <$> makeTailCallsStmt s
+makeTailCallsStmt   (SBlock [SYield e,s]) = (\s' -> SBlock [SYield e, s']) <$> makeTailCallsStmt s
 makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
 
 makeTailCalls :: MonadRefresh m => NProg -> m NProg
@@ -617,7 +617,7 @@ hasAssigns n (SIf _ st sf) = hasAssigns n st || hasAssigns n sf
 hasAssigns n (SCase _ cs) = any (hasAssigns n . snd) cs
 hasAssigns _ (SRet _) = False
 hasAssigns n (SBlock ss) = any (hasAssigns n) ss
-hasAssigns _ (SEmit _) = False
+hasAssigns _ (SYield _) = False
 hasAssigns n (SAssign n' _) = n == n'
 hasAssigns n (SFun fs s) = hasAssigns n s || any (\(p, s') -> not (n `S.member` patBound (freeVarsPat p)) && hasAssigns n s') fs
 hasAssigns _ SNop = False
@@ -628,7 +628,7 @@ propagateConstantsStmt   (SIf e st sf) = SIf e (propagateConstantsStmt st) (prop
 propagateConstantsStmt   (SCase e cs) = SCase e (map (id *** propagateConstantsStmt) cs)
 propagateConstantsStmt s@(SRet _) = s
 propagateConstantsStmt   (SBlock ss) = SBlock $ map propagateConstantsStmt ss
-propagateConstantsStmt s@(SEmit _) = s
+propagateConstantsStmt s@(SYield _) = s
 propagateConstantsStmt s@(SAssign _ _) = s
 propagateConstantsStmt   (SFun fs s) = SFun (M.map (id *** propagateConstantsStmt) fs) (propagateConstantsStmt s)
 propagateConstantsStmt s@SNop = s

@@ -114,7 +114,7 @@ instance FreeVars VStmt where
 instance FreeVars Stmt where
     freeVars (SLet _ v vs s) = freeVars vs `S.union` (freeVars s `underPat` freeVarsPat (TH.VarP v))
     freeVars (SAssign v vs) = freeVars vs
-    freeVars (SEmit e) = freeVars e
+    freeVars (SYield e) = freeVars e
     freeVars (SRet vs) = freeVars vs
     freeVars (SFun fs s) = freeVars s `S.union` freeVarsFunMap fs
     freeVars (SBlock ss) = freeVars ss
@@ -174,7 +174,7 @@ substStmt su   (SLet t v vs s) = SLet t v (substVStmt su' vs) (substStmt su' s)
     where su' = cutSubst (patSingleton v) su
 substStmt su   (SAssign v vs) = SAssign n' (substVStmt su vs)
     where (TH.VarE n') = substName su v
-substStmt su   (SEmit e) = SEmit (substExp su e)
+substStmt su   (SYield e) = SYield (substExp su e)
 substStmt su   (SRet vs) = SRet (substVStmt su vs)
 substStmt su   (SFun fs s) = SFun (flip M.map fs $ \(p, s) -> (substPat su p, substStmt (cutSubst (freeVarsPat p) su) s)) (substStmt su s)
 substStmt su   (SBlock ss) = SBlock (substStmt su <$> ss)

@@ -82,7 +82,7 @@ input ()
 fun f ():
     let x = False
     fun g y:
-        emit x == y
+        yield x == y
         let x = True
         ret call g (not y)
     ret call g True
@@ -94,9 +94,9 @@ ret call f ()
 input ()
 forever:
     var x = False
-    emit x
+    yield x
     x = not x
-    emit x
+    yield x
 |]
 
 [fsm|oscilVarFSM :: (CP.HiddenClockResetEnable dom)
@@ -105,7 +105,7 @@ input ()
 var x = True
 forever:
     x = not x
-    emit x
+    yield x
 |]
 
 [fsm|oscilVar2FSM :: (CP.HiddenClockResetEnable dom)
@@ -113,7 +113,7 @@ forever:
 input ()
 var x = False
 forever:
-    emit x
+    yield x
     x = not x
 |]
 
@@ -125,14 +125,14 @@ fun n ():
     x = not x
 forever:
     call n ()
-    emit x
+    yield x
 |]
 
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
               => CP.Signal dom () -> CP.Signal dom Integer
 input ()
 fun f i:
-    emit i
+    yield i
     ret call f (i+1)
 ret call f 0
 |]
@@ -142,7 +142,7 @@ ret call f 0
 input ()
 fun f i:
     let ii = i+1
-    emit i
+    yield i
     ret call f ii
 ret call f 0
 |]
@@ -151,8 +151,8 @@ ret call f 0
                   => CP.Signal dom () -> CP.Signal dom Integer
 input ()
 fun f i:
-    emit i
-    emit i
+    yield i
+    yield i
     ret call f (i+1)
 ret call f 0
 |]
@@ -162,8 +162,8 @@ ret call f 0
 input ()
 fun f i:
     let ii = i+1
-    emit i
-    emit i
+    yield i
+    yield i
     ret call f ii
 ret call f 0
 |]
@@ -173,8 +173,8 @@ ret call f 0
 input b
 fun f i:
     if b:
-      emit i
-    emit i
+      yield i
+    yield i
     ret call f (i+1)
 ret call f 0
 |]
@@ -185,8 +185,8 @@ input b
 var x = 0
 forever:
     if b:
-        emit x
-    emit x
+        yield x
+    yield x
     x = x + 1
 |]
 
@@ -194,7 +194,7 @@ forever:
                          => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun e i:
-    emit i
+    yield i
 fun f i:
     if b:
       call e i
@@ -208,7 +208,7 @@ ret call f 0
 input b
 var x = 0
 forever:
-    emit x
+    yield x
     if b:
         x = x + 1
 |]
@@ -218,7 +218,7 @@ forever:
 input b
 var x = 0
 forever:
-    emit x
+    yield x
     if not b:
         continue
     x = x + 1
@@ -230,7 +230,7 @@ input b
 var x = 0
 forever:
     do:
-        emit x
+        yield x
     while not b
     x = x + 1
 |]
@@ -239,7 +239,7 @@ forever:
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun g (i, j):
-    emit i
+    yield i
     ret call f j
 fun f i:
     if b:
@@ -254,7 +254,7 @@ ret call f 0
 input b
 fun f i:
     let bb = b
-    emit i
+    yield i
     if bb:
         ret call f (i+1)
     else:
@@ -266,7 +266,7 @@ ret call f 0
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun g i:
-    emit i
+    yield i
     ret call f i
 fun f i:
     if b:
@@ -281,13 +281,13 @@ ret call f 0
 param m
 input ()
 fun f i:
-    emit i
+    yield i
     if i == m:
         ret call g (i-1)
     else:
         ret call f (i+1)
 fun g i:
-    emit i
+    yield i
     if i == 0:
         ret call f (i+1)
     else:
@@ -302,11 +302,11 @@ input ()
 var i = 0
 forever:
     do:
-        emit i
+        yield i
         i = i + 1
     while i /= m
     do:
-        emit i
+        yield i
         i = i - 1
     while i /= 0
 |]
@@ -316,7 +316,7 @@ forever:
 param m
 input ()
 fun e i:
-    emit i
+    yield i
 var i = 0
 forever:
     do:
@@ -336,13 +336,13 @@ input ()
 var i = 0
 forever:
     do:
-        emit i
-        emit i
+        yield i
+        yield i
         i = i + 1
     while i /= m
     do:
-        emit i
-        emit i
+        yield i
+        yield i
         i = i - 1
     while i /= 0
 |]
@@ -352,7 +352,7 @@ forever:
 param m
 input ()
 fun e i:
-    emit i
+    yield i
 var i = 0
 forever:
     do:

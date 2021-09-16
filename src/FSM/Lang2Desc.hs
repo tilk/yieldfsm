@@ -10,7 +10,7 @@ import Control.Arrow
 
 stmt2dtree :: Maybe TH.Exp -> Stmt -> DecisionTree Transition
 stmt2dtree me       (SIf e s1 s2) = DTIf e (stmt2dtree me s1) (stmt2dtree me s2)
-stmt2dtree Nothing  (SBlock [SEmit e, s]) = stmt2dtree (Just e) s
+stmt2dtree Nothing  (SBlock [SYield e, s]) = stmt2dtree (Just e) s
 stmt2dtree me       (SLet VarLet n (VExp e) s) = DTLet (TH.VarP n) e (stmt2dtree me s)
 stmt2dtree me       (SCase e cs) = DTCase e (map (id *** stmt2dtree me) cs)
 stmt2dtree (Just e) (SRet (VCall n ec)) = DTLeaf $ Transition e n ec
