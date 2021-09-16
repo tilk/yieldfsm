@@ -194,6 +194,7 @@ refreshFunctions prog = do
 
 data CBData = CBData {
     cbDataFreeVars :: S.Set TH.Name,
+    cbDataInputVars :: S.Set TH.Name,
     cbDataName :: TH.Name
 }
 
@@ -207,7 +208,7 @@ emittingStmt (SLet _ _ _ s) = emittingStmt s
 
 makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState FunMap m) => Stmt -> m Stmt
 makeCont s = do
-    CBData fv n <- ask
+    CBData fv _ n <- ask
     let vs = S.toList $ freeVars s `S.difference` fv
     n' <- refreshName n
     modify $ M.insert n' (tupP $ map TH.VarP vs, s)
@@ -221,8 +222,13 @@ cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
 cutBlocksStmt (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt (SBlock ss) s'
     cutBlocksStmt s s''
-cutBlocksStmt (SYield e) s' | not (emittingStmt s') = -- TODO handling of inputs
-    return $ SBlock [SYield e, s']
+cutBlocksStmt (SYield e) s' | not (emittingStmt s') = do -- TODO handling of inputs
+    ivs <- asks cbDataInputVars
+    if S.null $ freeVars s' `S.intersection` ivs
+    then return $ SBlock [SYield e, s']
+    else do
+        s'' <- makeCont s'
+        cutBlocksStmt (SYield e) s''
 cutBlocksStmt (SIf e st sf) s' = 
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
 cutBlocksStmt (SCase e cs) s' = 
@@ -248,8 +254,9 @@ cutBlocksStmt s s' = do
 cutBlocks :: MonadRefresh m => NProg -> m NProg
 cutBlocks prog = do
     let fvs = freeVars $ SFun (nProgFuns prog) SNop
+    let ivs = boundVars $ nProgInputs prog
     fs' <- flip execStateT M.empty $ forM_ (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
-        s' <- flip runReaderT (CBData fvs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
+        s' <- flip runReaderT (CBData fvs ivs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
     return $ prog { nProgFuns = fs' }
 
