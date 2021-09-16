@@ -221,7 +221,7 @@ cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
 cutBlocksStmt (SBlock (s:ss)) s' = do
     s'' <- cutBlocksStmt (SBlock ss) s'
     cutBlocksStmt s s''
-cutBlocksStmt (SYield e) s' | not (emittingStmt s') = 
+cutBlocksStmt (SYield e) s' | not (emittingStmt s') = -- TODO handling of inputs
     return $ SBlock [SYield e, s']
 cutBlocksStmt (SIf e st sf) s' = 
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
