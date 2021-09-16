@@ -295,8 +295,8 @@ parseProg :: Parser Prog
 parseProg = do
     (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
     ps <- many (parseHsFoldSymbol "param" stringToHsPat)
-    is <- parseHsFoldSymbol "input" stringToHsPat
-    s <- locally prDataVars (M.union $ boundVarsEnv $ is:ps) $ parseBasicStmt
+    is <- (Just <$> parseHsFoldSymbol "input" stringToHsPat) <|> return Nothing
+    s <- locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ parseBasicStmt
     return $ Prog i t ps is s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)

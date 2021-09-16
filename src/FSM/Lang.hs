@@ -27,7 +27,7 @@ data Prog = Prog {
     progName :: TH.Name,
     progType :: TH.Type,
     progParams :: [TH.Pat],
-    progInputs :: TH.Pat,
+    progInputs :: Maybe TH.Pat,
     progBody :: Stmt
 } deriving Show
 
@@ -35,7 +35,7 @@ data NProg = NProg {
     nProgName :: TH.Name,
     nProgType :: TH.Type,
     nProgParams :: [TH.Pat],
-    nProgInputs :: TH.Pat,
+    nProgInputs :: Maybe TH.Pat,
     nProgFuns :: FunMap,
     nProgInit :: TH.Name,
     nProgInitParam :: TH.Exp,

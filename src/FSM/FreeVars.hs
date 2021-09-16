@@ -30,6 +30,9 @@ boundVars = patBound . freeVarsPat
 instance FreeVars a => FreeVars (Maybe a) where
     freeVars = maybe S.empty id . fmap freeVars
 
+instance FreeVarsPat a => FreeVarsPat (Maybe a) where
+    freeVarsPat = maybe (PatFV S.empty S.empty) id . fmap freeVarsPat
+
 freeVarsFunMap :: FunMap -> S.Set TH.Name
 freeVarsFunMap = S.unions . map (\(_, (p, s)) -> freeVars s `underPat` freeVarsPat p) . M.toList
 
