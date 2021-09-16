@@ -14,7 +14,7 @@ data VarKind = VarLet | VarMut deriving (Show, Eq)
 
 data Stmt = SLet VarKind TH.Name VStmt Stmt
           | SAssign TH.Name VStmt
-          | SEmit TH.Exp
+          | SYield TH.Exp
           | SRet VStmt
           | SFun FunMap Stmt
           | SBlock [Stmt]

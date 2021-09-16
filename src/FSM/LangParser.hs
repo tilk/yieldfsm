@@ -173,7 +173,7 @@ parseLet = do
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseEmit :: Parser Stmt
-parseEmit = SEmit <$> parseHsFoldSymbol "emit" stringToHsExp
+parseEmit = SYield <$> parseHsFoldSymbol "yield" stringToHsExp
 
 parseRet :: Parser Stmt
 parseRet = mkRet =<< parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
