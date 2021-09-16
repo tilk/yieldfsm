@@ -304,7 +304,7 @@ forever:
     do:
         yield i
         i = i + 1
-    while i /= m
+    until i == m
     do:
         yield i
         i = i - 1
@@ -322,7 +322,7 @@ forever:
     do:
         call e i
         i = i + 1
-    while i /= m
+    until i == m
     do:
         call e i
         i = i - 1
@@ -339,7 +339,7 @@ forever:
         yield i
         yield i
         i = i + 1
-    while i /= m
+    until i == m
     do:
         yield i
         yield i
@@ -359,7 +359,7 @@ forever:
         call e i
         call e i
         i = i + 1
-    while i /= m
+    until i == m
     do:
         call e i
         call e i
