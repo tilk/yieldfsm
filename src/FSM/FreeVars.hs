@@ -144,6 +144,7 @@ substExp s   (TH.ParensE e) = TH.ParensE (substExp s e)
 substExp s   (TH.LamE ps e) = TH.LamE (substPat s <$> ps) (substExp s' e)
     where s' = cutSubst (patUnions $ map freeVarsPat ps) s
 substExp s   (TH.TupE es) = TH.TupE (fmap (substExp s) <$> es)
+substExp s   (TH.CondE e e1 e2) = TH.CondE (substExp s e) (substExp s e1) (substExp s e2)
 
 renameFieldPat :: M.Map TH.Name TH.Exp -> TH.FieldPat -> TH.FieldPat
 renameFieldPat s (n, p) = (n, substPat s p)

@@ -38,8 +38,12 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
     testCounterEnMoore @CP.System "countEn" countEnFSM,
-    testCounterEnMoore @CP.System "countEnContinue" countEnContinueFSM,
-    testCounterEnMoore @CP.System "countEnWhile" countEnWhileFSM,
+    testCounterEnDelay @CP.System "countEnDelay" countEnDelayFSM,
+    testCounterEnDelay @CP.System "countEnDelayFlip" countEnDelayFlipFSM,
+    testCounterEnDelay @CP.System "countEnDelay2" countEnDelay2FSM,
+    testCounterEnDelay @CP.System "countEnDelayTail" countEnDelayTailFSM,
+    testCounterEnDelay @CP.System "countEnDelayContinue" countEnDelayContinueFSM,
+    testCounterEnDelay @CP.System "countEnDelayWhile" countEnDelayWhileFSM,
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
     testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
@@ -59,6 +63,10 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
         CP.simulateN (length l) machine l H.=== countSlowOpt 0 l
+    testCounterEnDelay :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
+    testCounterEnDelay name machine = TH.testProperty name $ H.property $ do
+        l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
+        CP.simulateN (length l) machine l H.=== take (length l) (0:drop 1 (scanl (\a b -> if b then a+1 else a) 0 (tail l)))
     testCounterEnMoore :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
     testCounterEnMoore name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
@@ -208,12 +216,56 @@ ret call f 0
 input b
 var x = 0
 forever:
+    let bb = b
+    yield x
+    if bb:
+        x = x + 1
+|]
+
+[fsm|countEnDelayFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
     yield x
     if b:
         x = x + 1
 |]
 
-[fsm|countEnContinueFSM :: (CP.HiddenClockResetEnable dom)
+[fsm|countEnDelayFlipFSM :: (CP.HiddenClockResetEnable dom)
+                         => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+yield x
+forever:
+    if b:
+        x = x + 1
+    yield x
+|]
+
+[fsm|countEnDelay2FSM :: (CP.HiddenClockResetEnable dom)
+                      => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    yield x
+    if b:
+        x = x + 1
+    yield x
+    if b:
+        x = x + 1
+|]
+
+[fsm|countEnDelayTailFSM :: (CP.HiddenClockResetEnable dom)
+                         => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+fun f x:
+    yield x
+    ret call f (x + if b then 1 else 0)
+ret call f 0
+|]
+
+[fsm|countEnDelayContinueFSM :: (CP.HiddenClockResetEnable dom)
                         => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
@@ -224,14 +276,14 @@ forever:
     x = x + 1
 |]
 
-[fsm|countEnWhileFSM :: (CP.HiddenClockResetEnable dom)
+[fsm|countEnDelayWhileFSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
 forever:
     do:
         yield x
-    while not b
+    until b
     x = x + 1
 |]
 
