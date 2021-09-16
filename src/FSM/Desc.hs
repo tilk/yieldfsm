@@ -3,6 +3,7 @@ module FSM.Desc where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
+import Prelude
 
 data Transition = Transition {
     transOutput :: TH.Exp,
@@ -25,7 +26,7 @@ data FSM = FSM {
     fsmType :: TH.Type,
     fsmParams :: [TH.Pat],
     fsmStates :: M.Map TH.Name FSMState,
-    fsmInputs :: TH.Pat,
+    fsmInputs :: Maybe TH.Pat,
     fsmInitState :: TH.Name,
     fsmInitStateParam :: TH.Exp,
     fsmConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])

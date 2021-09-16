@@ -30,11 +30,15 @@ prettyVStmt :: VStmt -> Doc
 prettyVStmt (VExp e) = TH.ppr e
 prettyVStmt (VCall n e) = prettyKeyword "call" <+> TH.ppr n <+> TH.ppr e
 
+prettyInputs :: Maybe TH.Pat -> Doc
+prettyInputs Nothing = empty
+prettyInputs (Just p) = prettyKeyword "input" <+> TH.ppr p
+
 prettyNProg :: NProg -> Doc
-prettyNProg np = vcat [prettyKeyword "input" <+> TH.ppr (nProgInputs np), prettyStmt (SFun (nProgFuns np) (SRet (VCall (nProgInit np) (nProgInitParam np))))]
+prettyNProg np = vcat [prettyInputs (nProgInputs np), prettyStmt (SFun (nProgFuns np) (SRet (VCall (nProgInit np) (nProgInitParam np))))]
 
 prettyProg :: Prog -> Doc
-prettyProg np = vcat [prettyKeyword "input" <+> TH.ppr (progInputs np), prettyStmt (progBody np)]
+prettyProg np = vcat [prettyInputs (progInputs np), prettyStmt (progBody np)]
 
 prettyNProgHPJ :: NProg -> HPJ.Doc
 prettyNProgHPJ = to_HPJ_Doc . prettyNProg

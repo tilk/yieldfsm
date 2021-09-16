@@ -61,14 +61,14 @@ compileFSM fsm = do
     let stateCons = map snd stateData
     let tvars = map TH.PlainTV $ fst =<< stateData
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
-        TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
+        TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ maybe (TH.TupP []) id $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
     contDecls <- forM (M.assocs $ fsmConts fsm) $ \(n, cs) -> do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' [(b, tupT $ map TH.VarT ns)]
         let contTvars = map TH.PlainTV $ nub $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
     return $ TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
                 TH.SigD (fsmName fsm) (fsmType fsm) :
-                TH.FunD (fsmName fsm) [TH.Clause (fsmParams fsm) (TH.NormalB $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) (
+                TH.FunD (fsmName fsm) [TH.Clause (fsmParams fsm) (TH.NormalB $ maybe (`TH.AppE` (TH.AppE (TH.VarE 'pure) (TH.TupE []))) (const id) (fsmInputs fsm) $ TH.AppE (TH.AppE (TH.VarE 'mealy) (TH.VarE funcName)) (TH.VarE initStateName)) (
                     TH.ValD (TH.VarP initStateName) (TH.NormalB $ TH.AppE (TH.ConE $ conName cn $ fsmInitState fsm) (fsmInitStateParam fsm)) [] :
                     TH.FunD funcName funcClauses : []
                 )] :

@@ -54,12 +54,12 @@ main = defaultMain $ testGroup "." [
     testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM,
     testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM]
     where
-    testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Bool) -> TestTree
-    testOscillator name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= take 100 (cycle [False, True])
-    testCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
-    testCounter name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= [(0 :: Integer)..99]
-    testSlowCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
-    testSlowCounter name machine = TU.testCase name $ CP.simulateN 100 machine (repeat ()) TU.@?= dup [(0 :: Integer)..49]
+    testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool) -> TestTree
+    testOscillator name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= take 100 (cycle [False, True])
+    testCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Integer) -> TestTree
+    testCounter name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= [(0 :: Integer)..99]
+    testSlowCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Integer) -> TestTree
+    testSlowCounter name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= dup [(0 :: Integer)..49]
     testSlowOptCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool -> CP.Signal dom Integer) -> TestTree
     testSlowOptCounter name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
@@ -76,18 +76,17 @@ main = defaultMain $ testGroup "." [
     testCounterEnMealy name machine = TH.testProperty name $ H.property $ do
         l <- H.forAll $ Gen.list (Range.linear 1 100) Gen.bool
         CP.simulateN (length l) machine l H.=== drop 1 (scanl (\a b -> if b then a+1 else a) 0 l)
-    testCounterUpDown :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+    testCounterUpDown :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom Integer) -> TestTree
     testCounterUpDown name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
-        CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
-    testCounterUpDownSlow :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom () -> CP.Signal dom Integer) -> TestTree
+        tail (CP.sampleN 101 (machine m)) H.=== take 100 (cycle $ [0..m-1] ++ [m,m-1..1])
+    testCounterUpDownSlow :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => Integer -> CP.Signal dom Integer) -> TestTree
     testCounterUpDownSlow name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
-        CP.simulateN 100 (machine m) (repeat ()) H.=== take 100 (dup $ cycle $ [0..m-1] ++ [m,m-1..1])
+        tail (CP.sampleN 101 (machine m)) H.=== take 100 (dup $ cycle $ [0..m-1] ++ [m,m-1..1])
 
 [fsm|oscilLiftFSM :: (CP.HiddenClockResetEnable dom)
-                  => CP.Signal dom () -> CP.Signal dom Bool
-input ()
+                  => CP.Signal dom Bool
 fun f ():
     let x = False
     fun g y:
@@ -99,8 +98,7 @@ ret call f ()
 |]
 
 [fsm|oscilAssignFSM :: (CP.HiddenClockResetEnable dom)
-                    => CP.Signal dom () -> CP.Signal dom Bool
-input ()
+                    => CP.Signal dom Bool
 forever:
     var x = False
     yield x
@@ -109,8 +107,7 @@ forever:
 |]
 
 [fsm|oscilVarFSM :: (CP.HiddenClockResetEnable dom)
-                 => CP.Signal dom () -> CP.Signal dom Bool
-input ()
+                 => CP.Signal dom Bool
 var x = True
 forever:
     x = not x
@@ -118,8 +115,7 @@ forever:
 |]
 
 [fsm|oscilVar2FSM :: (CP.HiddenClockResetEnable dom)
-                 => CP.Signal dom () -> CP.Signal dom Bool
-input ()
+                  => CP.Signal dom Bool
 var x = False
 forever:
     yield x
@@ -127,8 +123,7 @@ forever:
 |]
 
 [fsm|oscilCallFSM :: (CP.HiddenClockResetEnable dom)
-                    => CP.Signal dom () -> CP.Signal dom Bool
-input ()
+                  => CP.Signal dom Bool
 var x = True
 fun n ():
     x = not x
@@ -138,8 +133,7 @@ forever:
 |]
 
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
-              => CP.Signal dom () -> CP.Signal dom Integer
-input ()
+              => CP.Signal dom Integer
 fun f i:
     yield i
     ret call f (i+1)
@@ -147,8 +141,7 @@ ret call f 0
 |]
 
 [fsm|countLetFSM :: (CP.HiddenClockResetEnable dom) 
-                 => CP.Signal dom () -> CP.Signal dom Integer
-input ()
+                 => CP.Signal dom Integer
 fun f i:
     let ii = i+1
     yield i
@@ -157,8 +150,7 @@ ret call f 0
 |]
 
 [fsm|countSlowFSM :: (CP.HiddenClockResetEnable dom) 
-                  => CP.Signal dom () -> CP.Signal dom Integer
-input ()
+                  => CP.Signal dom Integer
 fun f i:
     yield i
     yield i
@@ -167,8 +159,7 @@ ret call f 0
 |]
 
 [fsm|countSlowLetFSM :: (CP.HiddenClockResetEnable dom) 
-                     => CP.Signal dom () -> CP.Signal dom Integer
-input ()
+                     => CP.Signal dom Integer
 fun f i:
     let ii = i+1
     yield i
@@ -340,9 +331,8 @@ ret call f 0
 |]
 
 [fsm|countUpDownFSM :: (CP.HiddenClockResetEnable dom)
-                    => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+                    => Integer -> CP.Signal dom Integer
 param m
-input ()
 fun f i:
     yield i
     if i == m:
@@ -359,9 +349,8 @@ ret call f 0
 |]
 
 [fsm|countUpDownWhileFSM :: (CP.HiddenClockResetEnable dom)
-                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+                         => Integer -> CP.Signal dom Integer
 param m
-input ()
 var i = 0
 forever:
     do:
@@ -375,9 +364,8 @@ forever:
 |]
 
 [fsm|countUpDownWhileCallFSM :: (CP.HiddenClockResetEnable dom)
-                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+                             => Integer -> CP.Signal dom Integer
 param m
-input ()
 fun e i:
     yield i
 var i = 0
@@ -393,9 +381,8 @@ forever:
 |]
 
 [fsm|countUpDownWhileSlowFSM :: (CP.HiddenClockResetEnable dom)
-                      => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+                             => Integer -> CP.Signal dom Integer
 param m
-input ()
 var i = 0
 forever:
     do:
@@ -411,9 +398,8 @@ forever:
 |]
 
 [fsm|countUpDownWhileSlowCallFSM :: (CP.HiddenClockResetEnable dom)
-                                 => Integer -> CP.Signal dom () -> CP.Signal dom Integer
+                                 => Integer -> CP.Signal dom Integer
 param m
-input ()
 fun e i:
     yield i
 var i = 0
