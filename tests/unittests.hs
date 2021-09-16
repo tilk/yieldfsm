@@ -37,16 +37,17 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOpt" countSlowOptFSM,
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
-    testCounterEnMoore @CP.System "countEn" countEnFSM,
+    testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
+    testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
     testCounterEnDelay @CP.System "countEnDelay" countEnDelayFSM,
     testCounterEnDelay @CP.System "countEnDelayFlip" countEnDelayFlipFSM,
     testCounterEnDelay @CP.System "countEnDelay2" countEnDelay2FSM,
     testCounterEnDelay @CP.System "countEnDelayTail" countEnDelayTailFSM,
     testCounterEnDelay @CP.System "countEnDelayContinue" countEnDelayContinueFSM,
     testCounterEnDelay @CP.System "countEnDelayWhile" countEnDelayWhileFSM,
-    testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
-    testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
-    testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
+    testCounterEnMoore @CP.System "countEnMooreTail" countEnMooreTailFSM,
+    testCounterEnMoore @CP.System "countEnMooreTail2" countEnMooreTail2FSM,
+    testCounterEnMealy @CP.System "countEnMealyTail" countEnMealyTailFSM,
     testCounterUpDown @CP.System "countUpDown" countUpDownFSM,
     testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM,
     testCounterUpDown @CP.System "countUpDownWhileCall" countUpDownWhileCallFSM,
@@ -211,8 +212,8 @@ fun f i:
 ret call f 0
 |]
 
-[fsm|countEnFSM :: (CP.HiddenClockResetEnable dom)
-                => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
 forever:
@@ -220,6 +221,16 @@ forever:
     yield x
     if bb:
         x = x + 1
+|]
+
+[fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    if b:
+        x = x + 1
+    yield x
 |]
 
 [fsm|countEnDelayFSM :: (CP.HiddenClockResetEnable dom)
@@ -266,7 +277,7 @@ ret call f 0
 |]
 
 [fsm|countEnDelayContinueFSM :: (CP.HiddenClockResetEnable dom)
-                        => CP.Signal dom Bool -> CP.Signal dom Integer
+                             => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
 forever:
@@ -277,7 +288,7 @@ forever:
 |]
 
 [fsm|countEnDelayWhileFSM :: (CP.HiddenClockResetEnable dom)
-                     => CP.Signal dom Bool -> CP.Signal dom Integer
+                          => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
 forever:
@@ -287,8 +298,8 @@ forever:
     x = x + 1
 |]
 
-[fsm|countEnMooreFSM :: (CP.HiddenClockResetEnable dom)
-                     => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMooreTailFSM :: (CP.HiddenClockResetEnable dom)
+                         => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun g (i, j):
     yield i
@@ -301,8 +312,8 @@ fun f i:
 ret call f 0
 |]
 
-[fsm|countEnMoore2FSM :: (CP.HiddenClockResetEnable dom)
-                      => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMooreTail2FSM :: (CP.HiddenClockResetEnable dom)
+                          => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun f i:
     let bb = b
@@ -314,8 +325,8 @@ fun f i:
 ret call f 0
 |]
 
-[fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom)
-                     => CP.Signal dom Bool -> CP.Signal dom Integer
+[fsm|countEnMealyTailFSM :: (CP.HiddenClockResetEnable dom)
+                         => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 fun g i:
     yield i
