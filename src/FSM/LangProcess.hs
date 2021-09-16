@@ -513,18 +513,24 @@ data ContData = ContData {
     contDataTgt :: ContTgt
 }
 
-data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name
+data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name | ContTgtFunCont TH.Name
 
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
     TCData name cfn _ an fvs rfs fn _ <- ask
     let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
     cn <- makeSeqName $ "C" ++ name ++ TH.nameBase f
+    part <- view tcDataPartition
+    b <- flip partitionLookup part <$> view tcDataName
     case vst of
         VCall f' e' 
             | f' `S.notMember` rfs -> do
                 tell [ContData cn fn f n vs e' (ContTgtFun f')]
                 return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
+            | b == partitionLookup f' part -> do
+                tell [ContData cn fn f n vs e' (ContTgtFunCont f')]
+                return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
+            | otherwise -> error "unsupported tail call"
         VExp e' -> do
             tell [ContData cn fn f n vs e' (ContTgtCont an)]
             return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
@@ -584,6 +590,10 @@ makeTailCalls prog = evalUniqueT $ do
                     rcn <- makeName "rc"
                     return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ rcn : contDataVars cd],
                         SLet VarLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall rap (tupE [contDataExp cd, TH.VarE rcn])))
+                ContTgtFunCont fn -> do
+                    rcn <- makeName "rc"
+                    return (TH.ConP (contDataConName cd) [tupP $ map TH.VarP $ rcn : contDataVars cd],
+                        SLet VarLet (contDataResName cd) (VExp $ TH.VarE rn) $ SRet (VCall fn (tupE [contDataExp cd, TH.VarE rcn])))
             return (an, (tupP [TH.VarP rn, TH.VarP cfn], SCase (TH.VarE cfn) cs))
         | otherwise = return (an, (tupP [], SNop)) -- will be cleaned up anyway
     cdef cdmap (pid, (ctn, _an))
@@ -592,6 +602,9 @@ makeTailCalls prog = evalUniqueT $ do
                 ContTgtFun _ ->
                     return (contDataConName cd, contDataVars cd)
                 ContTgtCont _ -> do
+                    rcn <- makeName "rc"
+                    return (contDataConName cd, rcn : contDataVars cd)
+                ContTgtFunCont _ -> do
                     rcn <- makeName "rc"
                     return (contDataConName cd, rcn : contDataVars cd)
             return $ M.singleton ctn $ M.fromList cs
