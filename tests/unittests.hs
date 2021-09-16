@@ -173,7 +173,7 @@ ret call f 0
 input b
 fun f i:
     if b:
-      yield i
+        yield i
     yield i
     ret call f (i+1)
 ret call f 0
@@ -197,7 +197,7 @@ fun e i:
     yield i
 fun f i:
     if b:
-      call e i
+        call e i
     call e i
     ret call f (i+1)
 ret call f 0
