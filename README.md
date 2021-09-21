@@ -160,6 +160,20 @@ forever:
 ```
 
 The `if` statement can have an optional `else` block.
+For example, the following code describes a counter which counts up or down depending on the input.
+
+```
+[fsm|counter_updown :: (HiddenClockResetEnable dom, KnownNat n)
+                    => Signal dom Bit -> Signal dom (Unsigned n)
+input d
+var x = 0
+forever:
+    if d:
+        x = x - 1
+    else:
+        x = x + 1
+    yield x
+```
 
 TODO
 
