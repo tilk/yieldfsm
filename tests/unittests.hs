@@ -45,6 +45,7 @@ main = defaultMain $ testGroup "." [
     testCounterEnDelay @CP.System "countEnDelayTail" countEnDelayTailFSM,
     testCounterEnDelay @CP.System "countEnDelayContinue" countEnDelayContinueFSM,
     testCounterEnDelay @CP.System "countEnDelayWhile" countEnDelayWhileFSM,
+    testCounterEnMoore @CP.System "countEnMooreWhile" countEnMooreWhileFSM,
     testCounterEnMoore @CP.System "countEnMooreTail" countEnMooreTailFSM,
     testCounterEnMoore @CP.System "countEnMooreTail2" countEnMooreTail2FSM,
     testCounterEnMealy @CP.System "countEnMealyTail" countEnMealyTailFSM,
@@ -286,6 +287,19 @@ forever:
     do:
         yield x
     until b
+    x = x + 1
+|]
+
+[fsm|countEnMooreWhileFSM :: (CP.HiddenClockResetEnable dom)
+                          => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+var bb = False
+forever:
+    do:
+        bb = b
+        yield x
+    until bb
     x = x + 1
 |]
 
