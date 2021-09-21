@@ -630,22 +630,39 @@ hasAssigns n (SFun fs s) = hasAssigns n s || any (\(p, s') -> not (n `S.member` 
 hasAssigns _ SNop = False
 hasAssigns n (SLet _ n' _ s) = n /= n' && hasAssigns n s
 
-propagateConstantsStmt :: Stmt -> Stmt
-propagateConstantsStmt   (SIf e st sf) = SIf e (propagateConstantsStmt st) (propagateConstantsStmt sf)
-propagateConstantsStmt   (SCase e cs) = SCase e (map (id *** propagateConstantsStmt) cs)
-propagateConstantsStmt s@(SRet _) = s
-propagateConstantsStmt   (SBlock ss) = SBlock $ map propagateConstantsStmt ss
-propagateConstantsStmt s@(SYield _) = s
-propagateConstantsStmt s@(SAssign _ _) = s
-propagateConstantsStmt   (SFun fs s) = SFun (M.map (id *** propagateConstantsStmt) fs) (propagateConstantsStmt s)
-propagateConstantsStmt s@SNop = s
-propagateConstantsStmt   (SLet t n vs s) 
-    | VExp e <- vs, isConstantExpr e, canSubst t = propagateConstantsStmt $ substStmtSingle n e s
-    | otherwise = SLet t n vs $ propagateConstantsStmt s
+setVars :: VarKind -> S.Set TH.Name -> M.Map TH.Name VarKind -> M.Map TH.Name VarKind
+setVars t s m = M.fromList (map (, t) $ S.toList s) `M.union` m
+
+propagateConstantsFunMap :: M.Map TH.Name VarKind -> FunMap -> FunMap
+propagateConstantsFunMap m = M.map (propagateConstantsCase m)
+
+propagateConstantsCase :: M.Map TH.Name VarKind -> (TH.Pat, Stmt) -> (TH.Pat, Stmt)
+propagateConstantsCase m (p, s) = (p, propagateConstantsStmt (setVars VarLet (boundVars p) m) s)
+
+propagateConstantsStmt :: M.Map TH.Name VarKind -> Stmt -> Stmt
+propagateConstantsStmt m   (SIf e st sf) = SIf e (propagateConstantsStmt m st) (propagateConstantsStmt m sf)
+propagateConstantsStmt m   (SCase e cs) = SCase e (map (propagateConstantsCase m) cs)
+propagateConstantsStmt _ s@(SRet _) = s
+propagateConstantsStmt m   (SBlock ss) = SBlock $ map (propagateConstantsStmt m) ss
+propagateConstantsStmt _ s@(SYield _) = s
+propagateConstantsStmt _ s@(SAssign _ _) = s
+propagateConstantsStmt m   (SFun fs s) = SFun (propagateConstantsFunMap m fs) (propagateConstantsStmt m s)
+propagateConstantsStmt _ s@SNop = s
+propagateConstantsStmt m   (SLet t n vs s) 
+    | VExp e@(TH.VarE n') <- vs, Just VarLet <- M.lookup n' m, canSubst t = propagateConstantsStmt m $ substStmtSingle n e s
+    | VExp e <- vs, isConstantExpr e, canSubst t = propagateConstantsStmt m $ substStmtSingle n e s
+    | otherwise = SLet t n vs $ propagateConstantsStmt (M.insert n t m) s
     where
     canSubst VarLet = True
     canSubst VarMut = not $ hasAssigns n s
 
 propagateConstants :: Prog -> Prog
-propagateConstants prog = prog { progBody = propagateConstantsStmt $ progBody prog }
+propagateConstants prog = prog { progBody = propagateConstantsStmt m $ progBody prog }
+    where
+    m = setVars VarMut (boundVars $ progInputs prog) $ setVars VarLet (freeVars $ progBody prog) M.empty
+
+propagateConstantsN :: NProg -> NProg
+propagateConstantsN prog = prog { nProgFuns = propagateConstantsFunMap m $ nProgFuns prog }
+    where
+    m = setVars VarMut (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
 

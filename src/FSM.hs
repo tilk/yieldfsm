@@ -33,7 +33,7 @@ mkFSM str = do
             np0 <- cutBlocks np
             TH.runIO $ hPutStrLn stderr $ "cutBlocks:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np0
-            np' <- makeTailCalls np0
+            np' <- propagateConstantsN <$> makeTailCalls np0
             TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
             np'' <- removeEpsilon np'
