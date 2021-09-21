@@ -47,3 +47,21 @@ sBlock [] = SNop
 sBlock [s] = s
 sBlock ss = SBlock ss
 
+tupE :: [TH.Exp] -> TH.Exp
+tupE [x] = x
+tupE xs = TH.TupE . map Just $ xs
+
+tupP :: [TH.Pat] -> TH.Pat
+tupP [x] = x
+tupP xs = TH.TupP xs
+
+emittingStmt :: Stmt -> Bool
+emittingStmt (SBlock [SYield _, _]) = True
+emittingStmt SNop = False
+emittingStmt (SRet _) = False
+emittingStmt (SIf _ st sf) = emittingStmt st || emittingStmt sf
+emittingStmt (SCase _ cs) = any (emittingStmt . snd) cs
+emittingStmt (SLet _ _ _ s) = emittingStmt s
+
+
+

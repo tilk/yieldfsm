@@ -97,6 +97,19 @@ library
     FSM.LangParser,
     FSM.LangPretty,
     FSM.LangProcess
+  other-modules:
+    FSM.Process.PropagateConstants
+    FSM.Process.MakeTailCalls
+    FSM.Process.CallGraph
+    FSM.Process.ReturningFuns
+    FSM.Process.RefreshFunctions
+    FSM.Process.CutBlocks
+    FSM.Process.MakeLocalVars
+    FSM.Process.DeTailCall
+    FSM.Process.RemoveEpsilon
+    FSM.Process.LambdaLift
+    FSM.Util.MonadRefresh
+    FSM.Util.MonadUnique
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with clashfsm project in scope
