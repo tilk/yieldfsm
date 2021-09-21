@@ -108,6 +108,7 @@ library
     FSM.Process.DeTailCall
     FSM.Process.RemoveEpsilon
     FSM.Process.LambdaLift
+    FSM.Process.FoldInit
     FSM.Util.MonadRefresh
     FSM.Util.MonadUnique
   default-language: Haskell2010
