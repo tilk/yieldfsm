@@ -1,5 +1,5 @@
 packages:
-  clashfsm.cabal
+  yieldfsm.cabal
 
 package clash-prelude
   -- 'large-tuples' generates tuple instances for various classes up to the

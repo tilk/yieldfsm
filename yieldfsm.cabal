@@ -1,9 +1,15 @@
 cabal-version:       2.4
-name:                clashfsm
+name:                yieldfsm
 version:             0.1
 license:             BSD-2-Clause
-author:              John Smith <john@example.com>
-maintainer:          John Smith <john@example.com>
+author:              Marek Materzok <tilk@tilk.eu>
+maintainer:          Marek Materzok <tilk@tilk.eu>
+category:            Hardware
+synopsis:            YieldFSM, a DSL for describing finite state machines in Clash
+
+source-repository head
+  type: git
+  location: https://github.com/tilk/yieldfsm
 
 common common-options
   default-extensions:
@@ -58,7 +64,7 @@ common common-options
     -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
   build-depends:
-    base,
+    base >= 4.14 && < 4.15,
     Cabal,
     template-haskell,
     containers >= 0.6 && < 0.7,
@@ -113,21 +119,21 @@ library
     FSM.Util.MonadUnique
   default-language: Haskell2010
 
--- Builds the executable 'clash', with clashfsm project in scope
+-- Builds the executable 'clash', with yieldfsm project in scope
 executable clash
   main-is: bin/Clash.hs
   default-language: Haskell2010
-  Build-Depends: base, clash-ghc, clashfsm
+  Build-Depends: base, clash-ghc, yieldfsm
   if !os(Windows)
     ghc-options: -dynamic
 
--- Builds the executable 'clashi', with clashfsm project in scope
+-- Builds the executable 'clashi', with yieldfsm project in scope
 executable clashi
   main-is: bin/Clashi.hs
   default-language: Haskell2010
   if !os(Windows)
     ghc-options: -dynamic
-  build-depends: base, clash-ghc, clashfsm
+  build-depends: base, clash-ghc, yieldfsm
 
 -- test-suite doctests
 --   import:           common-options
@@ -138,7 +144,7 @@ executable clashi
 -- 
 --   build-depends:
 --     base,
---     clashfsm,
+--     yieldfsm,
 --     process,
 --     doctest >= 0.16.1 && < 0.18
 -- 
@@ -152,7 +158,7 @@ test-suite test-library
 --  other-modules:
 --    Test
   build-depends:
-    clashfsm,
+    yieldfsm,
     QuickCheck,
     hedgehog,
     tasty >= 1.2 && < 1.3,
