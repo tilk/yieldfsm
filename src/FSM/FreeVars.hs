@@ -15,12 +15,13 @@ class FreeVarsPat a where
 
 data PatFV = PatFV { patBound :: S.Set TH.Name, patFree :: S.Set TH.Name }
 
-patEmpty = PatFV S.empty S.empty
+instance Semigroup PatFV where
+    PatFV s1 s2 <> PatFV t1 t2 = PatFV (s1 `S.union` t1) (s2 `S.union` t2)
+
+instance Monoid PatFV where
+    mempty = PatFV S.empty S.empty
+
 patSingleton n = PatFV (S.singleton n) S.empty
-
-patUnion (PatFV s1 s2) (PatFV t1 t2) = PatFV (s1 `S.union` t1) (s2 `S.union` t2)
-
-patUnions = foldr patUnion patEmpty
 
 underPat s (PatFV s1 s2) = s2 `S.union` (s `S.difference` s1)
 
@@ -48,7 +49,7 @@ instance FreeVars TH.Exp where
     freeVars (TH.InfixE me1 e me2) = freeVars e `S.union` freeVars me1 `S.union` freeVars me2
     freeVars (TH.UInfixE e1 e e2) = freeVars e `S.union` freeVars e1 `S.union` freeVars e2
     freeVars (TH.ParensE e) = freeVars e
-    freeVars (TH.LamE ps e) = freeVars e `underPat` patUnions (map freeVarsPat ps)
+    freeVars (TH.LamE ps e) = freeVars e `underPat` mconcat (map freeVarsPat ps)
     freeVars (TH.LamCaseE ms) = freeVars ms
     freeVars (TH.TupE es) = freeVars es
     freeVars (TH.UnboxedTupE es) = freeVars es
@@ -72,23 +73,23 @@ instance FreeVars TH.Exp where
 freeVarsFieldPat (n, p) = freeVarsPat p
 
 instance FreeVarsPat TH.Pat where
-    freeVarsPat (TH.LitP _) = patEmpty
+    freeVarsPat (TH.LitP _) = mempty
     freeVarsPat (TH.VarP n) = patSingleton n
     freeVarsPat (TH.TupP ps) = freeVarsPat ps
     freeVarsPat (TH.UnboxedTupP ps) = freeVarsPat ps
     freeVarsPat (TH.UnboxedSumP p _ _) = freeVarsPat p
     freeVarsPat (TH.ConP _ ps) = freeVarsPat ps
-    freeVarsPat (TH.InfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
-    freeVarsPat (TH.UInfixP p1 _ p2) = freeVarsPat p1 `patUnion` freeVarsPat p2
+    freeVarsPat (TH.InfixP p1 _ p2) = freeVarsPat p1 <> freeVarsPat p2
+    freeVarsPat (TH.UInfixP p1 _ p2) = freeVarsPat p1 <> freeVarsPat p2
     freeVarsPat (TH.ParensP p) = freeVarsPat p
     freeVarsPat (TH.TildeP p) = freeVarsPat p
     freeVarsPat (TH.BangP p) = freeVarsPat p
-    freeVarsPat (TH.AsP n p) = freeVarsPat p `patUnion` patSingleton n
-    freeVarsPat (TH.WildP) = patEmpty
-    freeVarsPat (TH.RecP _ fps) = patUnions $ map freeVarsFieldPat fps
+    freeVarsPat (TH.AsP n p) = freeVarsPat p <> patSingleton n
+    freeVarsPat (TH.WildP) = mempty
+    freeVarsPat (TH.RecP _ fps) = mconcat $ map freeVarsFieldPat fps
     freeVarsPat (TH.ListP ps) = freeVarsPat ps
     freeVarsPat (TH.SigP p _) = freeVarsPat p
-    freeVarsPat (TH.ViewP e p) = freeVarsPat p `patUnion` PatFV S.empty (freeVars e)
+    freeVarsPat (TH.ViewP e p) = freeVarsPat p <> PatFV S.empty (freeVars e)
 
 instance FreeVars TH.Pat where
     freeVars = patFree . freeVarsPat
@@ -129,7 +130,7 @@ instance FreeVars a => FreeVars [a] where
     freeVars ss = S.unions $ map freeVars ss
 
 instance FreeVarsPat a => FreeVarsPat [a] where
-    freeVarsPat ss = patUnions $ map freeVarsPat ss
+    freeVarsPat ss = mconcat $ map freeVarsPat ss
 
 substName :: M.Map TH.Name TH.Exp -> TH.Name -> TH.Exp
 substName s n | Just e <- M.lookup n s = e
@@ -148,7 +149,7 @@ instance Subst TH.Exp where
     subst s   (TH.UInfixE e1 e e2) = TH.UInfixE (subst s e1) (subst s e) (subst s e2)
     subst s   (TH.ParensE e) = TH.ParensE (subst s e)
     subst s   (TH.LamE ps e) = TH.LamE (subst s <$> ps) (subst s' e)
-        where s' = cutSubst (patUnions $ map freeVarsPat ps) s
+        where s' = cutSubst (mconcat $ map freeVarsPat ps) s
     subst s   (TH.TupE es) = TH.TupE (fmap (subst s) <$> es)
     subst s   (TH.CondE e e1 e2) = TH.CondE (subst s e) (subst s e1) (subst s e2)
 
