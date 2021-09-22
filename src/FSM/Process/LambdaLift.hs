@@ -26,7 +26,7 @@ $(makeLenses ''LLData)
 lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
 lambdaLiftStmt   (SLet t ln vs s) = do
     ln' <- refreshName ln
-    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameStmtSingle ln ln' s)
+    SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameSingle ln ln' s)
 lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
 lambdaLiftStmt s@(SYield _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
@@ -44,7 +44,7 @@ lambdaLiftStmt   (SFun fm s) = do
     where
     processFun n (p, s') = do
         (p', su) <- refreshPat p
-        (,) <$> (tupP . (++ [p']) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt (renameStmt su s')
+        (,) <$> (tupP . (++ [p']) <$> views llDataEnv (map TH.VarP . snd . fromJust . M.lookup n)) <*> lambdaLiftStmt (rename su s')
 
 lambdaLiftVStmt :: (Monad m, MonadReader LLData m) => VStmt -> m VStmt
 lambdaLiftVStmt vs@(VExp _) = return vs

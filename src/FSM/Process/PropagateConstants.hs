@@ -37,8 +37,8 @@ propagateConstantsStmt _ s@(SAssign _ _) = s
 propagateConstantsStmt m   (SFun fs s) = SFun (propagateConstantsFunMap m fs) (propagateConstantsStmt m s)
 propagateConstantsStmt _ s@SNop = s
 propagateConstantsStmt m   (SLet t n vs s)
-    | VExp e@(TH.VarE n') <- vs, Just VarLet <- M.lookup n' m, canSubst t = propagateConstantsStmt m $ substStmtSingle n e s
-    | VExp e <- vs, isConstantExpr e, canSubst t = propagateConstantsStmt m $ substStmtSingle n e s
+    | VExp e@(TH.VarE n') <- vs, Just VarLet <- M.lookup n' m, canSubst t = propagateConstantsStmt m $ substSingle n e s
+    | VExp e <- vs, isConstantExpr e, canSubst t = propagateConstantsStmt m $ substSingle n e s
     | otherwise = SLet t n vs $ propagateConstantsStmt (M.insert n t m) s
     where
     canSubst VarLet = True

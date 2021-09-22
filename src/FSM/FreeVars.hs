@@ -135,78 +135,72 @@ substName :: M.Map TH.Name TH.Exp -> TH.Name -> TH.Exp
 substName s n | Just e <- M.lookup n s = e
               | otherwise = TH.VarE n
 
-substExp :: M.Map TH.Name TH.Exp -> TH.Exp -> TH.Exp
-substExp s e@(TH.VarE v) = substName s v
-substExp _ e@(TH.ConE _) = e
-substExp _ e@(TH.LitE _) = e
-substExp s   (TH.AppE e1 e2) = TH.AppE (substExp s e1) (substExp s e2)
-substExp s   (TH.AppTypeE e t) = TH.AppTypeE (substExp s e) t
-substExp s   (TH.InfixE me1 e me2) = TH.InfixE (substExp s <$> me1) (substExp s e) (substExp s <$> me2)
-substExp s   (TH.UInfixE e1 e e2) = TH.UInfixE (substExp s e1) (substExp s e) (substExp s e2)
-substExp s   (TH.ParensE e) = TH.ParensE (substExp s e)
-substExp s   (TH.LamE ps e) = TH.LamE (substPat s <$> ps) (substExp s' e)
-    where s' = cutSubst (patUnions $ map freeVarsPat ps) s
-substExp s   (TH.TupE es) = TH.TupE (fmap (substExp s) <$> es)
-substExp s   (TH.CondE e e1 e2) = TH.CondE (substExp s e) (substExp s e1) (substExp s e2)
+class Subst a where
+    subst :: M.Map TH.Name TH.Exp -> a -> a
+
+instance Subst TH.Exp where
+    subst s e@(TH.VarE v) = substName s v
+    subst _ e@(TH.ConE _) = e
+    subst _ e@(TH.LitE _) = e
+    subst s   (TH.AppE e1 e2) = TH.AppE (subst s e1) (subst s e2)
+    subst s   (TH.AppTypeE e t) = TH.AppTypeE (subst s e) t
+    subst s   (TH.InfixE me1 e me2) = TH.InfixE (subst s <$> me1) (subst s e) (subst s <$> me2)
+    subst s   (TH.UInfixE e1 e e2) = TH.UInfixE (subst s e1) (subst s e) (subst s e2)
+    subst s   (TH.ParensE e) = TH.ParensE (subst s e)
+    subst s   (TH.LamE ps e) = TH.LamE (subst s <$> ps) (subst s' e)
+        where s' = cutSubst (patUnions $ map freeVarsPat ps) s
+    subst s   (TH.TupE es) = TH.TupE (fmap (subst s) <$> es)
+    subst s   (TH.CondE e e1 e2) = TH.CondE (subst s e) (subst s e1) (subst s e2)
 
 renameFieldPat :: M.Map TH.Name TH.Exp -> TH.FieldPat -> TH.FieldPat
-renameFieldPat s (n, p) = (n, substPat s p)
+renameFieldPat s (n, p) = (n, subst s p)
 
-substPat :: M.Map TH.Name TH.Exp -> TH.Pat -> TH.Pat
-substPat s p@(TH.LitP _) = p
-substPat s p@(TH.VarP n) = p
-substPat s   (TH.TupP ps) = TH.TupP (substPat s <$> ps)
-substPat s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (substPat s <$> ps)
-substPat s   (TH.ConP n ps) = TH.ConP n (substPat s <$> ps)
-substPat s   (TH.InfixP p1 n p2) = TH.InfixP (substPat s p1) n (substPat s p2)
-substPat s   (TH.UInfixP p1 n p2) = TH.UInfixP (substPat s p1) n (substPat s p2)
-substPat s   (TH.ParensP p) = TH.ParensP (substPat s p)
-substPat s   (TH.TildeP p) = TH.TildeP (substPat s p)
-substPat s   (TH.BangP p) = TH.BangP (substPat s p)
-substPat s   (TH.AsP n p) = TH.AsP n (substPat s p)
-substPat s p@(TH.WildP) = p
-substPat s   (TH.RecP n fps) = TH.RecP n (renameFieldPat s <$> fps)
-substPat s   (TH.ListP ps) = TH.ListP (substPat s <$> ps)
-substPat s   (TH.SigP p t) = TH.SigP (substPat s p) t
-substPat s   (TH.ViewP e p) = TH.ViewP (substExp s e) (substPat s p)
+instance Subst TH.Pat where
+    subst s p@(TH.LitP _) = p
+    subst s p@(TH.VarP n) = p
+    subst s   (TH.TupP ps) = TH.TupP (subst s <$> ps)
+    subst s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (subst s <$> ps)
+    subst s   (TH.ConP n ps) = TH.ConP n (subst s <$> ps)
+    subst s   (TH.InfixP p1 n p2) = TH.InfixP (subst s p1) n (subst s p2)
+    subst s   (TH.UInfixP p1 n p2) = TH.UInfixP (subst s p1) n (subst s p2)
+    subst s   (TH.ParensP p) = TH.ParensP (subst s p)
+    subst s   (TH.TildeP p) = TH.TildeP (subst s p)
+    subst s   (TH.BangP p) = TH.BangP (subst s p)
+    subst s   (TH.AsP n p) = TH.AsP n (subst s p)
+    subst s p@(TH.WildP) = p
+    subst s   (TH.RecP n fps) = TH.RecP n (renameFieldPat s <$> fps)
+    subst s   (TH.ListP ps) = TH.ListP (subst s <$> ps)
+    subst s   (TH.SigP p t) = TH.SigP (subst s p) t
+    subst s   (TH.ViewP e p) = TH.ViewP (subst s e) (subst s p)
 
 cutSubst :: PatFV -> M.Map TH.Name a -> M.Map TH.Name a
 cutSubst (PatFV vs _) s = M.withoutKeys s vs
 
-substStmt :: M.Map TH.Name TH.Exp -> Stmt -> Stmt
-substStmt su   (SLet t v vs s) = SLet t v (substVStmt su' vs) (substStmt su' s)
-    where su' = cutSubst (patSingleton v) su
-substStmt su   (SAssign v vs) = SAssign n' (substVStmt su vs)
-    where (TH.VarE n') = substName su v
-substStmt su   (SYield e) = SYield (substExp su e)
-substStmt su   (SRet vs) = SRet (substVStmt su vs)
-substStmt su   (SFun fs s) = SFun (flip M.map fs $ \(p, s) -> (substPat su p, substStmt (cutSubst (freeVarsPat p) su) s)) (substStmt su s)
-substStmt su   (SBlock ss) = SBlock (substStmt su <$> ss)
-substStmt su   (SIf e st sf) = SIf (substExp su e) (substStmt su st) (substStmt su sf)
-substStmt su   (SCase e cs) = SCase (substExp su e) (flip map cs $ \(p, s) -> (substPat su p, substStmt (cutSubst (freeVarsPat p) su) s))
-substStmt su s@(SNop) = s
+instance Subst Stmt where
+    subst su   (SLet t v vs s) = SLet t v (subst su' vs) (subst su' s)
+        where su' = cutSubst (patSingleton v) su
+    subst su   (SAssign v vs) = SAssign n' (subst su vs)
+        where (TH.VarE n') = substName su v
+    subst su   (SYield e) = SYield (subst su e)
+    subst su   (SRet vs) = SRet (subst su vs)
+    subst su   (SFun fs s) = SFun (flip M.map fs $ \(p, s) -> (subst su p, subst (cutSubst (freeVarsPat p) su) s)) (subst su s)
+    subst su   (SBlock ss) = SBlock (subst su <$> ss)
+    subst su   (SIf e st sf) = SIf (subst su e) (subst su st) (subst su sf)
+    subst su   (SCase e cs) = SCase (subst su e) (flip map cs $ \(p, s) -> (subst su p, subst (cutSubst (freeVarsPat p) su) s))
+    subst su s@(SNop) = s
 
-substStmtSingle :: TH.Name -> TH.Exp -> Stmt -> Stmt
-substStmtSingle n e = substStmt (M.singleton n e)
+substSingle :: Subst a => TH.Name -> TH.Exp -> a -> a
+substSingle n e = subst (M.singleton n e)
 
-substVStmt :: M.Map TH.Name TH.Exp -> VStmt -> VStmt
-substVStmt su (VExp e) = VExp (substExp su e)
-substVStmt su (VCall n e) = VCall n (substExp su e)
+instance Subst VStmt where
+    subst su (VExp e) = VExp (subst su e)
+    subst su (VCall n e) = VCall n (subst su e)
 
-renameExp :: M.Map TH.Name TH.Name -> TH.Exp -> TH.Exp
-renameExp su = substExp (M.map TH.VarE su)
+rename :: Subst a => M.Map TH.Name TH.Name -> a -> a
+rename su = subst (M.map TH.VarE su)
 
-renamePat :: M.Map TH.Name TH.Name -> TH.Pat -> TH.Pat
-renamePat su = substPat (M.map TH.VarE su)
-
-renameStmt :: M.Map TH.Name TH.Name -> Stmt -> Stmt
-renameStmt su = substStmt (M.map TH.VarE su)
-
-renameVStmt :: M.Map TH.Name TH.Name -> VStmt -> VStmt
-renameVStmt su = substVStmt (M.map TH.VarE su)
-
-renameStmtSingle :: TH.Name -> TH.Name -> Stmt -> Stmt
-renameStmtSingle n n' = substStmtSingle n (TH.VarE n')
+renameSingle :: Subst a => TH.Name -> TH.Name -> a -> a
+renameSingle n n' = substSingle n (TH.VarE n')
 
 isConstantExpr :: TH.Exp -> Bool
 isConstantExpr (TH.VarE _) = False

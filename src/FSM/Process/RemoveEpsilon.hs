@@ -38,7 +38,7 @@ removeEpsilonStmt s@(SRet (VCall f e)) = do
     if em && (b || emittingStmt s' || not (S.null $ S.intersection ivs $ freeVars s')) then removeEpsilonFrom f >> return s
     else do
         (p', su) <- refreshPat p
-        SCase e <$> (return . (p',) <$> removeEpsilonStmt (renameStmt su s'))
+        SCase e <$> (return . (p',) <$> removeEpsilonStmt (rename su s'))
 removeEpsilonStmt s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
 
 removeEpsilonFrom :: (MonadRefresh f, MonadReader REData f, MonadState (M.Map TH.Name (TH.Pat, Stmt)) f) =>
