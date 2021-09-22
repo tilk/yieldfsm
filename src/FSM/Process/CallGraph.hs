@@ -1,7 +1,6 @@
 module FSM.Process.CallGraph(CGEdge(..), CG, callGraph, callGraphFlat, callGraphFunMap) where
 
 import FSM.Lang
-import FSM.FreeVars
 import Prelude
 import Control.Monad
 import qualified Data.Map.Strict as M

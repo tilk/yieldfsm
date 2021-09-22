@@ -6,13 +6,15 @@ import qualified Data.Map.Strict as M
 import Control.Monad
 import FSM.Desc
 import Prelude
-import Data.List
+import Data.List(foldl', nub)
 import Data.Maybe(fromJust)
 import GHC.Generics(Generic)
-import Clash.Prelude(NFDataX, BitPack, mealy)
+import Clash.Prelude(NFDataX, mealy)
 
+conName :: M.Map TH.Name TH.Name -> TH.Name -> TH.Name
 conName cn = fromJust . flip M.lookup cn
 
+b :: TH.Bang
 b = TH.Bang TH.NoSourceUnpackedness TH.NoSourceStrictness
 
 compileDT :: M.Map TH.Name TH.Name -> DecisionTree Transition -> TH.Q TH.Exp
@@ -38,12 +40,15 @@ compilePat (TH.ConP n ps) = do
 
 makeConNames :: String -> [TH.Name] -> M.Map TH.Name TH.Name
 makeConNames nm = fst . foldl' f (M.empty, M.empty) where
+    f :: (M.Map TH.Name TH.Name, M.Map String Integer) -> TH.Name -> (M.Map TH.Name TH.Name, M.Map String Integer)
     f (cn, d) n | Just k <- M.lookup s d = (M.insert n (TH.mkName $ "C" ++ s ++ "_" ++ nm ++ show k) cn, M.insert s (k+1) d)
                 | otherwise = (M.insert n (TH.mkName $ "C" ++ s ++ "_" ++ nm) cn, M.insert s 0 d)
         where s = TH.nameBase n
 
+derivclause :: TH.DerivClause
 derivclause = TH.DerivClause Nothing [TH.ConT ''Show, TH.ConT ''Generic, TH.ConT ''NFDataX]
 
+tupT :: [TH.Type] -> TH.Type
 tupT [] = TH.TupleT 0
 tupT [t] = t
 tupT ts = foldl TH.AppT (TH.TupleT (length ts)) ts
