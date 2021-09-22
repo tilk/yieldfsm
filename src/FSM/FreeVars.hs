@@ -5,6 +5,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Prelude
 import FSM.Lang
+import Control.Arrow
 
 class FreeVars a where
     freeVars :: a -> S.Set TH.Name
@@ -128,7 +129,7 @@ instance FreeVarsPat TH.Stmt where
 
 instance FreeVarsPat TH.Dec where
     freeVarsPat (TH.ValD p b ds) = patFreeVars b `underPatFV` (freeVarsPat ds `underPatFV` freeVarsPat p)
-    freeVarsPat (TH.FunD n cs) = patSingleton n <> patFreeVars cs
+    freeVarsPat (TH.FunD n cs) = patFreeVars cs `underPatFV` patSingleton n
 
 instance FreeVars TH.Pat where
     freeVars = patFree . freeVarsPat
@@ -181,23 +182,44 @@ instance Subst TH.Exp where
     subst _ e@(TH.LitE _) = e
     subst s   (TH.AppE e1 e2) = TH.AppE (subst s e1) (subst s e2)
     subst s   (TH.AppTypeE e t) = TH.AppTypeE (subst s e) t
-    subst s   (TH.InfixE me1 e me2) = TH.InfixE (subst s <$> me1) (subst s e) (subst s <$> me2)
+    subst s   (TH.InfixE me1 e me2) = TH.InfixE (subst s me1) (subst s e) (subst s me2)
     subst s   (TH.UInfixE e1 e e2) = TH.UInfixE (subst s e1) (subst s e) (subst s e2)
     subst s   (TH.ParensE e) = TH.ParensE (subst s e)
-    subst s   (TH.LamE ps e) = TH.LamE (subst s <$> ps) (subst s' e)
-        where s' = cutSubst (mconcat $ map freeVarsPat ps) s
-    subst s   (TH.TupE es) = TH.TupE (fmap (subst s) <$> es)
+    subst s   (TH.LamE ps e) = TH.LamE (subst s ps) (subst (cutSubstPat ps s) e)
+    subst s   (TH.LamCaseE ms) = TH.LamCaseE (subst s ms)
+    subst s   (TH.TupE es) = TH.TupE (subst s es)
+    subst s   (TH.UnboxedTupE es) = TH.UnboxedTupE (subst s es)
+    subst s   (TH.UnboxedSumE e al ar) = TH.UnboxedSumE (subst s e) al ar
     subst s   (TH.CondE e e1 e2) = TH.CondE (subst s e) (subst s e1) (subst s e2)
+    subst s   (TH.MultiIfE ges) = TH.MultiIfE $ map (\(g, e) -> (subst s g, subst (cutSubstPat g s) e)) ges
+    subst s   (TH.LetE ds e) = TH.LetE (subst s ds) (subst (cutSubstPat ds s) e)
+    subst s   (TH.CaseE e ms) = TH.CaseE (subst s e) (subst s ms) 
+    subst s   (TH.DoE ss) = TH.DoE $ substStmts s ss
+    subst s   (TH.MDoE ss) = TH.MDoE $ substStmts s ss
+    subst s   (TH.CompE ss) = TH.CompE $ substStmts s ss
+    subst s   (TH.ArithSeqE r) = TH.ArithSeqE $ subst s r
+    subst s   (TH.ListE es) = TH.ListE $ map (subst s) es
+    subst s   (TH.SigE e t) = TH.SigE (subst s e) t
+    subst s   (TH.RecConE n fes) = TH.RecConE n (map (id *** subst s) fes)
+    subst s   (TH.RecUpdE e fes) = TH.RecUpdE (subst s e) (map (id *** subst s) fes)
+    subst s   (TH.StaticE e) = TH.StaticE (subst s e)
+    subst _ e@(TH.UnboundVarE _) = e
+    subst _ e@(TH.LabelE _) = e
+    subst _ e@(TH.ImplicitParamVarE _) = e
 
-renameFieldPat :: M.Map TH.Name TH.Exp -> TH.FieldPat -> TH.FieldPat
-renameFieldPat s (n, p) = (n, subst s p)
+instance Subst TH.Range where
+    subst s (TH.FromR e) = TH.FromR (subst s e)
+    subst s (TH.FromThenR e1 e2) = TH.FromThenR (subst s e1) (subst s e2)
+    subst s (TH.FromToR e1 e2) = TH.FromToR (subst s e1) (subst s e2)
+    subst s (TH.FromThenToR e1 e2 e3) = TH.FromThenToR (subst s e1) (subst s e2) (subst s e3)
 
 instance Subst TH.Pat where
     subst _ p@(TH.LitP _) = p
     subst _ p@(TH.VarP _) = p
-    subst s   (TH.TupP ps) = TH.TupP (subst s <$> ps)
-    subst s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (subst s <$> ps)
-    subst s   (TH.ConP n ps) = TH.ConP n (subst s <$> ps)
+    subst s   (TH.TupP ps) = TH.TupP (subst s ps)
+    subst s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (subst s ps)
+    subst s   (TH.UnboxedSumP p al ar) = TH.UnboxedSumP (subst s p) al ar
+    subst s   (TH.ConP n ps) = TH.ConP n (subst s ps)
     subst s   (TH.InfixP p1 n p2) = TH.InfixP (subst s p1) n (subst s p2)
     subst s   (TH.UInfixP p1 n p2) = TH.UInfixP (subst s p1) n (subst s p2)
     subst s   (TH.ParensP p) = TH.ParensP (subst s p)
@@ -205,13 +227,54 @@ instance Subst TH.Pat where
     subst s   (TH.BangP p) = TH.BangP (subst s p)
     subst s   (TH.AsP n p) = TH.AsP n (subst s p)
     subst _ p@(TH.WildP) = p
-    subst s   (TH.RecP n fps) = TH.RecP n (renameFieldPat s <$> fps)
-    subst s   (TH.ListP ps) = TH.ListP (subst s <$> ps)
+    subst s   (TH.RecP n fps) = TH.RecP n ((id *** subst s) <$> fps)
+    subst s   (TH.ListP ps) = TH.ListP (subst s ps)
     subst s   (TH.SigP p t) = TH.SigP (subst s p) t
     subst s   (TH.ViewP e p) = TH.ViewP (subst s e) (subst s p)
 
+instance Subst TH.Match where
+    subst s (TH.Match p b ds) = TH.Match (subst s p) (subst s'' b) (subst s' ds)
+        where s' = cutSubstPat p s
+              s'' = cutSubstPat ds s'
+
+instance Subst TH.Clause where
+    subst s (TH.Clause ps b ds) = TH.Clause (subst s ps) (subst s'' b) (subst s' ds)
+        where s' = cutSubstPat ps s
+              s'' = cutSubstPat ds s'
+
+instance Subst TH.Guard where
+    subst s (TH.NormalG e) = TH.NormalG (subst s e)
+    subst s (TH.PatG ss) = TH.PatG (substStmts s ss)
+
+instance Subst TH.Body where
+    subst s (TH.NormalB e) = TH.NormalB (subst s e)
+    subst s (TH.GuardedB ges) = TH.GuardedB (map (substGuardedExp s) ges)
+
+instance Subst TH.Stmt where
+    subst s (TH.BindS p e) = TH.BindS (subst s p) (subst s e)
+    subst s (TH.LetS ds) = TH.LetS $ subst s ds
+    subst s (TH.NoBindS e) = TH.NoBindS $ subst s e
+    subst s (TH.ParS sss) = TH.ParS $ map (substStmts s) sss
+    subst s (TH.RecS ss) = TH.RecS $ substStmts s ss
+
+instance Subst TH.Dec where
+    subst s (TH.ValD p b ds) = TH.ValD (subst s p) (subst s'' b) (subst s' ds)
+        where s' = cutSubstPat p s
+              s'' = cutSubstPat ds s'
+    subst s (TH.FunD n cs) = TH.FunD n (subst (cutSubst (patSingleton n) s) cs)
+
+substStmts :: M.Map TH.Name TH.Exp -> [TH.Stmt] -> [TH.Stmt]
+substStmts _  [] = []
+substStmts su (s:ss) = subst su s:substStmts (cutSubstPat s su) ss
+
+substGuardedExp :: M.Map TH.Name TH.Exp -> (TH.Guard, TH.Exp) -> (TH.Guard, TH.Exp)
+substGuardedExp s (g, e) = (subst s g, subst (cutSubstPat g s) e)
+
 cutSubst :: PatFV -> M.Map TH.Name a -> M.Map TH.Name a
 cutSubst (PatFV vs _) s = M.withoutKeys s vs
+
+cutSubstPat :: FreeVarsPat a => a -> M.Map TH.Name b -> M.Map TH.Name b
+cutSubstPat p = cutSubst (freeVarsPat p)
 
 instance Subst Stmt where
     subst su   (SLet t v vs s) = SLet t v (subst su' vs) (subst su' s)
@@ -220,11 +283,17 @@ instance Subst Stmt where
         where (TH.VarE n') = substName su v
     subst su   (SYield e) = SYield (subst su e)
     subst su   (SRet vs) = SRet (subst su vs)
-    subst su   (SFun fs s) = SFun (flip M.map fs $ \(p, s') -> (subst su p, subst (cutSubst (freeVarsPat p) su) s')) (subst su s)
+    subst su   (SFun fs s) = SFun (flip M.map fs $ \(p, s') -> (subst su p, subst (cutSubstPat p su) s')) (subst su s)
     subst su   (SBlock ss) = SBlock (subst su <$> ss)
     subst su   (SIf e st sf) = SIf (subst su e) (subst su st) (subst su sf)
-    subst su   (SCase e cs) = SCase (subst su e) (flip map cs $ \(p, s) -> (subst su p, subst (cutSubst (freeVarsPat p) su) s))
+    subst su   (SCase e cs) = SCase (subst su e) (flip map cs $ \(p, s) -> (subst su p, subst (cutSubstPat p su) s))
     subst _  s@(SNop) = s
+
+instance Subst a => Subst [a] where
+    subst s = map (subst s)
+
+instance Subst a => Subst (Maybe a) where
+    subst s = fmap (subst s)
 
 substSingle :: Subst a => TH.Name -> TH.Exp -> a -> a
 substSingle n e = subst (M.singleton n e)
