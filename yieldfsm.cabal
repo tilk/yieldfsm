@@ -109,6 +109,7 @@ library
     FSM.Process.CallGraph
     FSM.Process.ReturningFuns
     FSM.Process.RefreshFunctions
+    FSM.Process.RefreshVars
     FSM.Process.CutBlocks
     FSM.Process.MakeLocalVars
     FSM.Process.DeTailCall
