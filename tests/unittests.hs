@@ -34,6 +34,7 @@ main = defaultMain $ testGroup "." [
     testCounter @CP.System "countLet" countLetFSM,
     testSlowCounter @CP.System "countSlow" countSlowFSM,
     testSlowCounter @CP.System "countSlowVarNoRet" countSlowVarNoRetFSM,
+    testSlowCounter @CP.System "countSlowVarRet" countSlowVarRetFSM,
     testSlowCounter @CP.System "countSlowLet" countSlowLetFSM,
     testSlowOptCounter @CP.System "countSlowOpt" countSlowOptFSM,
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
@@ -169,6 +170,22 @@ fun f ():
 fun g ():
     yield i
     i = i + 1
+    ret call f ()
+forever:
+    call f ()
+|]
+
+[fsm|countSlowVarRetFSM :: CP.HiddenClockResetEnable dom
+                        => CP.Signal dom Integer
+var i = 0
+fun f ():
+    yield i
+    ret call g ()
+fun g ():
+    yield i
+    i = i + 1
+    if i `mod` 2 == 0:
+        ret ()
     ret call f ()
 forever:
     call f ()

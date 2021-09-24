@@ -10,17 +10,19 @@ import qualified Data.Set as S
 import qualified Language.Haskell.TH as TH
 import FSM.Util.MonadRefresh
 import FSM.Process.ReturningFuns
+import FSM.Process.TailCallSCC
 
 data DTData = DTData {
     _dtDataFunction :: TH.Name,
-    _dtDataReturning :: S.Set TH.Name
+    _dtDataReturning :: S.Set TH.Name,
+    _dtDataSCC :: Partition TH.Name
 }
 
 $(makeLenses ''DTData)
 
 deTailCall :: MonadRefresh m => Prog -> m Prog
 deTailCall prog = do
-    s' <- flip runReaderT (DTData (TH.mkName "") (returningFuns $ progBody prog)) $ deTailCallStmt $ progBody prog
+    s' <- flip runReaderT (DTData (TH.mkName "") (returningFuns $ progBody prog) (tailCallSCC $ progBody prog)) $ deTailCallStmt $ progBody prog
     return $ prog { progBody = s' }
 
 deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt -> m Stmt
@@ -35,7 +37,8 @@ deTailCallStmt s@(SRet (VExp _)) = return s
 deTailCallStmt s@(SRet (VCall f e)) = do
     rf <- view dtDataReturning
     f' <- view dtDataFunction
-    if f `S.member` rf && f /= f'
+    part <- view dtDataSCC
+    if f `S.member` rf && partitionLookup f part /= partitionLookup f' part
     then do
         n <- refreshName f
         return $ SLet VarLet  n (VCall f e) (SRet (VExp $ TH.VarE n))
