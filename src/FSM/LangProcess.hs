@@ -2,7 +2,7 @@
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, cutBlocks, removeEpsilon, makeLocalVars,
     makeTailCalls, deTailCall, propagateConstants, propagateConstantsN,
-    foldInit, refreshVars
+    foldInit, refreshVars, simplifyCase
 ) where
 
 import FSM.Process.PropagateConstants
@@ -15,4 +15,5 @@ import FSM.Process.DeTailCall
 import FSM.Process.RemoveEpsilon
 import FSM.Process.LambdaLift
 import FSM.Process.FoldInit
+import FSM.Process.SimplifyCase
 
