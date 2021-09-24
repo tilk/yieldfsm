@@ -14,29 +14,8 @@ import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 import FSM.Util.MonadRefresh
 import FSM.Util.MonadUnique
-import FSM.Process.CallGraph
 import FSM.Process.ReturningFuns
-import Data.Graph(stronglyConnComp, flattenSCC)
-
-data Partition a = Partition {
-    partitionMap :: M.Map a Int,
-    partitionSets :: M.Map Int (S.Set a)
-} deriving Show
-
-partitionLookup :: Ord a => a -> Partition a -> Int
-partitionLookup k = fromJust . M.lookup k . partitionMap
-
-tailCallSCC :: FunMap -> Partition TH.Name
-tailCallSCC fs = Partition pMap pSets
-    where
-    pMap = M.unions $ (\(i, is) -> map (`M.singleton` i) is) =<< sccs
-    pSets = M.fromList $ map (id *** S.fromList) sccs
-    sccs = zip [0..] $ map flattenSCC $ stronglyConnComp graph
-    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (M.keys fs) ++) $ map edgeToGr $ callGraphFlat fs
-    edgeToGr e | cgEdgeTail e = M.singleton (cgEdgeSrc e) (S.singleton $ cgEdgeDst e)
-               | otherwise = M.empty
-    funToGr n = M.singleton n S.empty
-    toSCC (n, ns) = (n, n, S.toList ns)
+import FSM.Process.TailCallSCC
 
 data TCData = TCData {
     _tcDataProgName :: String,
@@ -125,7 +104,7 @@ makeTailCalls prog = evalUniqueT $ do
     return $ prog { nProgFuns = M.fromList $ apfs ++ fsd, nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
     fvs = freeVarsFunMap $ nProgFuns prog
-    part = tailCallSCC $ nProgFuns prog
+    part = tailCallSCCFunMap $ nProgFuns prog
     name = TH.nameBase $ nProgName prog
     rfs = returningFunsFlat (nProgFuns prog)
     apf cdmap (pid, (_ctn, an))
