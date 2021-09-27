@@ -139,6 +139,19 @@ forever:
 ```
 
 In other words, the `let` statement is crucial to achieve Moore-style behavior.
+This occurs often in typical automata, so YieldFSM has a special syntax for this.
+If you write a name of an input variable with a prime, it represents the value of this input before the last `yield`.
+For example, the following code represents a Moore style toggling automaton.
+
+```
+[fsm|entoggle2_prime :: HiddenClockResetEnable dom => Signal dom Bit -> Signal dom Bit
+input en
+var b = low
+forever:
+    yield b
+    b = b `xor` en'
+|]
+```
 
 ### Conditions and loops
 
@@ -168,14 +181,30 @@ For example, the following code describes a counter which counts up or down depe
 input d
 var x = 0
 forever:
-    if d:
+    if bitToBool d:
         x = x - 1
     else:
         x = x + 1
     yield x
 ```
 
-TODO
+Both `while` and `do`-`while` are available in YieldFSM.
+However, the `do`-`while` variant is often more useful because using `while` can lead to yield-less iterations of the top level loop.
+There are also `until` and `do`-`until` loops, which negate the condition.
+The following example has the same behavior as `entoggle2`:
+
+```
+[fsm|entoggle2_until :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bit -> CP.Signal dom Bit
+input en
+var b = low
+forever:
+    do:
+        yield x
+    until bitToBool en'
+    b = complement b
+|]
+```
 
 ### Parameters
 
