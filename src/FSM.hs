@@ -24,7 +24,7 @@ mkFSM str = do
             p' <- deTailCall =<< refreshVars =<< refreshFunctions p
             TH.runIO $ hPutStrLn stderr $ "deTailCall:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
-            p'' <- propagateConstants <$> makeLocalVars p'
+            p'' <- simplifyCase <$> makeLocalVars p'
             TH.runIO $ hPutStrLn stderr $ "makeLocalVars:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p''
             np <- lambdaLift p''
@@ -33,10 +33,10 @@ mkFSM str = do
             np0 <- cutBlocks np
             TH.runIO $ hPutStrLn stderr $ "cutBlocks:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np0
-            np' <- foldInit . propagateConstantsN <$> makeTailCalls np0
+            np' <- foldInit . simplifyCaseN <$> makeTailCalls np0
             TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
-            np'' <- simplifyCase <$> removeEpsilon np'
+            np'' <- simplifyCaseN <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
             ret <- compileFSM (nprog2desc np'')

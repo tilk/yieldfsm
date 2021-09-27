@@ -1,11 +1,13 @@
-module FSM.Process.SimplifyCase(simplifyCase) where
+module FSM.Process.SimplifyCase(simplifyCase, simplifyCaseN) where
 
 import FSM.Lang
+import FSM.FreeVars
 import Prelude
 import Control.Arrow
 import Control.Monad
 import Control.Applicative
 import Data.Maybe
+import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 
@@ -57,35 +59,68 @@ mmaybe _ f (MJust a) = f a
 mmaybe a _ MNo = a
 mmaybe a _ MNoNo = a
 
-simplifyCase1 :: TH.Exp -> TH.Pat -> Stmt -> MMaybe Stmt
-simplifyCase1 e (TH.VarP n) s = MJust $ SLet VarLet n (VExp e) s
-simplifyCase1 (TH.LitE l) (TH.LitP l') s | l == l' = MJust s
-simplifyCase1 e (TH.LitP _) _ | matchableExp e = MNo
-simplifyCase1 (TH.TupE mes) (TH.TupP ps) s
-    | length mes == length ps, all isJust mes = foldM (flip $ uncurry simplifyCase1) s $ zip (map fromJust mes) ps
-simplifyCase1 e (TH.TupP _) _ | matchableExp e = MNo
-simplifyCase1 e (TH.ConP n ps) s 
-    | Just (n', es) <- conExp [] e, n == n', length es == length ps = foldM (flip $ uncurry simplifyCase1) s $ zip es ps
-simplifyCase1 e (TH.ConP _ _) _ | matchableExp e = MNo
-simplifyCase1 _ _ _ = MNoNo
+simplifyCase1 :: M.Map TH.Name VarKind -> TH.Exp -> TH.Pat -> Stmt -> MMaybe Stmt
+simplifyCase1 m e (TH.VarP n) s = MJust $ mkLet m VarLet n (VExp e) s
+simplifyCase1 m (TH.LitE l) (TH.LitP l') s | l == l' = MJust s
+simplifyCase1 m e (TH.LitP _) _ | matchableExp e = MNo
+simplifyCase1 m (TH.TupE mes) (TH.TupP ps) s
+    | length mes == length ps, all isJust mes = foldM (flip $ uncurry $ simplifyCase1 m) s $ zip (map fromJust mes) ps
+simplifyCase1 m e (TH.TupP _) _ | matchableExp e = MNo
+simplifyCase1 m e (TH.ConP n ps) s 
+    | Just (n', es) <- conExp [] e, n == n', length es == length ps = foldM (flip $ uncurry $ simplifyCase1 m) s $ zip es ps
+simplifyCase1 m e (TH.ConP _ _) _ | matchableExp e = MNo
+simplifyCase1 m _ _ _ = MNoNo
 
-simplifyCaseDo :: TH.Exp -> [(TH.Pat, Stmt)] -> Stmt
-simplifyCaseDo e cs = mmaybe (SCase e cs) id $ msum (map (uncurry $ simplifyCase1 e) cs)
+simplifyCaseDo :: M.Map TH.Name VarKind -> TH.Exp -> [(TH.Pat, Stmt)] -> Stmt
+simplifyCaseDo m e cs = mmaybe (SCase e (map (simplifyCaseCase m) cs)) id $ msum (map (uncurry $ simplifyCase1 m e) cs)
 
-simplifyCaseStmt :: Stmt -> Stmt
-simplifyCaseStmt   (SCase e cs) = simplifyCaseDo e (map (id *** simplifyCaseStmt) cs)
-simplifyCaseStmt e@(SRet _) = e
-simplifyCaseStmt e@(SAssign _ _) = e
-simplifyCaseStmt e@(SYield _) = e
-simplifyCaseStmt   (SFun fs s) = SFun (simplifyCaseFunMap fs) (simplifyCaseStmt s)
-simplifyCaseStmt   (SLet t n vs s) = SLet t n vs (simplifyCaseStmt s)
-simplifyCaseStmt   (SBlock ss) = SBlock $ map simplifyCaseStmt ss
-simplifyCaseStmt   (SIf e st sf) = SIf e (simplifyCaseStmt st) (simplifyCaseStmt sf)
-simplifyCaseStmt e@SNop = e
+simplifyCaseCase :: M.Map TH.Name VarKind -> (TH.Pat, Stmt) -> (TH.Pat, Stmt)
+simplifyCaseCase m (p, s) = (p, simplifyCaseStmt (setVars VarLet (boundVars p) m) s)
 
-simplifyCaseFunMap :: FunMap -> FunMap
-simplifyCaseFunMap = M.map (id *** simplifyCaseStmt)
+mkLet :: M.Map TH.Name VarKind -> VarKind -> TH.Name -> VStmt -> Stmt -> Stmt
+mkLet m t n vs s
+    | VExp e@(TH.VarE n') <- vs, Just VarLet <- M.lookup n' m, canSubst t = simplifyCaseStmt m $ substSingle n e s
+    | VExp e <- vs, isConstantExpr e, canSubst t = simplifyCaseStmt m $ substSingle n e s
+    | otherwise = SLet t n vs $ simplifyCaseStmt (M.insert n t m) s
+    where
+    canSubst VarLet = True
+    canSubst VarMut = not $ hasAssigns n s
 
-simplifyCase :: NProg -> NProg
-simplifyCase prog = prog { nProgFuns = simplifyCaseFunMap $ nProgFuns prog }
+simplifyCaseStmt :: M.Map TH.Name VarKind -> Stmt -> Stmt
+simplifyCaseStmt m   (SCase e cs) = simplifyCaseDo m e cs
+simplifyCaseStmt m e@(SRet _) = e
+simplifyCaseStmt m e@(SAssign _ _) = e
+simplifyCaseStmt m e@(SYield _) = e
+simplifyCaseStmt m   (SFun fs s) = SFun (simplifyCaseFunMap m fs) (simplifyCaseStmt m s)
+simplifyCaseStmt m   (SBlock ss) = SBlock $ map (simplifyCaseStmt m) ss
+simplifyCaseStmt m   (SIf e st sf) = SIf e (simplifyCaseStmt m st) (simplifyCaseStmt m sf)
+simplifyCaseStmt m e@SNop = e
+simplifyCaseStmt m   (SLet t n vs s) = mkLet m t n vs s
+
+simplifyCaseFunMap :: M.Map TH.Name VarKind -> FunMap -> FunMap
+simplifyCaseFunMap m = M.map (simplifyCaseCase m)
+
+simplifyCase :: Prog -> Prog
+simplifyCase prog = prog { progBody = simplifyCaseStmt m $ progBody prog }
+    where
+    m = setVars VarMut (boundVars $ progInputs prog) $ setVars VarLet (freeVars $ progBody prog) M.empty
+
+simplifyCaseN :: NProg -> NProg
+simplifyCaseN prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
+    where
+    m = setVars VarMut (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
+
+setVars :: VarKind -> S.Set TH.Name -> M.Map TH.Name VarKind -> M.Map TH.Name VarKind
+setVars t s m = M.fromList (map (, t) $ S.toList s) `M.union` m
+
+hasAssigns :: TH.Name -> Stmt -> Bool
+hasAssigns n (SIf _ st sf) = hasAssigns n st || hasAssigns n sf
+hasAssigns n (SCase _ cs) = any (hasAssigns n . snd) cs
+hasAssigns _ (SRet _) = False
+hasAssigns n (SBlock ss) = any (hasAssigns n) ss
+hasAssigns _ (SYield _) = False
+hasAssigns n (SAssign n' _) = n == n'
+hasAssigns n (SFun fs s) = hasAssigns n s || any (\(p, s') -> not (n `S.member` patBound (freeVarsPat p)) && hasAssigns n s') fs
+hasAssigns _ SNop = False
+hasAssigns n (SLet _ n' _ s) = n /= n' && hasAssigns n s
 
