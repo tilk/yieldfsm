@@ -21,12 +21,13 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
 data PRData = PRData {
+    _prDataInputs :: S.Set TH.Name,
     _prDataVars :: M.Map TH.Name VarKind,
     _prDataLoop :: Maybe TH.Name
 }
 
 prData :: PRData
-prData = PRData M.empty Nothing
+prData = PRData S.empty M.empty Nothing
 
 data PWData = PWData {
     _pwDataRet :: Bool
@@ -76,11 +77,15 @@ ident sc' = L.lexeme sc' $ (:) <$> letterChar <*> many alphaNumChar
 qlift :: TH.Q a -> Parser a
 qlift = lift . lift . lift
 
+withoutPrims :: TH.Name -> TH.Name
+withoutPrims = TH.mkName . reverse . dropWhile (== '\'') . reverse . TH.nameBase
+
 e2m :: FreeVars a => Either String a -> Parser a
 e2m (Left s) = fail s
 e2m (Right r) = do
     vm <- view prDataVars
-    forM_ (freeVars r `S.difference` M.keysSet vm) $ qlift . TH.reify
+    is <- view prDataInputs
+    forM_ (S.filter (not . (`S.member` is) . withoutPrims) $ freeVars r `S.difference` M.keysSet vm) $ qlift . TH.reify
     return r
 
 newlineOrEof :: Parser ()
@@ -296,7 +301,7 @@ parseProg = do
     (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
     ps <- many (parseHsFoldSymbol "param" stringToHsPat)
     is <- (Just <$> parseHsFoldSymbol "input" stringToHsPat) <|> return Nothing
-    s <- locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ parseBasicStmt
+    s <- locally prDataInputs (S.union $ boundVars is) $ locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ parseBasicStmt
     return $ Prog i t ps is s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)

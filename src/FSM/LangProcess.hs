@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies, FlexibleContexts #-}
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, cutBlocks, removeEpsilon, makeLocalVars,
-    makeTailCalls, deTailCall,
+    makeTailCalls, deTailCall, previousInputs,
     foldInit, refreshVars, simplifyCase, simplifyCaseN
 ) where
 
@@ -15,4 +15,5 @@ import FSM.Process.RemoveEpsilon
 import FSM.Process.LambdaLift
 import FSM.Process.FoldInit
 import FSM.Process.SimplifyCase
+import FSM.Process.PreviousInputs
 

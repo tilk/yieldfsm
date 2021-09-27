@@ -12,6 +12,9 @@ import qualified Test.Tasty.HUnit as TU
 
 import FSM
 
+instance CP.Default Bool where
+    def = False
+
 dup :: [a] -> [a]
 dup [] = []
 dup (x:xs) = x:x:dup xs
@@ -40,12 +43,14 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
+    testCounterEnMoore @CP.System "countEnMoorePrim" countEnMoorePrimFSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
     testCounterEnDelay @CP.System "countEnDelay" countEnDelayFSM,
     testCounterEnDelay @CP.System "countEnDelayFlip" countEnDelayFlipFSM,
     testCounterEnDelay @CP.System "countEnDelay2" countEnDelay2FSM,
     testCounterEnDelay @CP.System "countEnDelayTail" countEnDelayTailFSM,
     testCounterEnDelay @CP.System "countEnDelayContinue" countEnDelayContinueFSM,
+    testCounterEnMoore @CP.System "countEnDelayContinue" countEnMooreContinueFSM,
     testCounterEnDelay @CP.System "countEnDelayWhile" countEnDelayWhileFSM,
     testCounterEnMoore @CP.System "countEnMooreWhile" countEnMooreWhileFSM,
     testCounterEnMoore @CP.System "countEnMooreTail" countEnMooreTailFSM,
@@ -247,6 +252,16 @@ forever:
         x = x + 1
 |]
 
+[fsm|countEnMoorePrimFSM :: (CP.HiddenClockResetEnable dom)
+                         => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    yield x
+    if b':
+        x = x + 1
+|]
+
 [fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
@@ -322,16 +337,25 @@ forever:
     x = x + 1
 |]
 
+[fsm|countEnMooreContinueFSM :: (CP.HiddenClockResetEnable dom)
+                             => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    yield x
+    if not b':
+        continue
+    x = x + 1
+|]
+
 [fsm|countEnMooreWhileFSM :: (CP.HiddenClockResetEnable dom)
                           => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
 var x = 0
-var bb = False
 forever:
     do:
-        bb = b
         yield x
-    until bb
+    until b'
     x = x + 1
 |]
 

@@ -163,6 +163,9 @@ instance FreeVars Stmt where
     freeVars (SCase e cs) = freeVars e <> S.unions (flip map cs $ \(p, s) -> freeVars s `freeVarsUnderPat` p)
     freeVars (SNop) = S.empty
 
+instance FreeVars Prog where
+    freeVars prog = freeVars (progBody prog) `S.difference` boundVars (progInputs prog) `S.difference` boundVars (progParams prog)
+
 instance FreeVars a => FreeVars [a] where
     freeVars ss = S.unions $ map freeVars ss
 

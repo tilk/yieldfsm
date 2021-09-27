@@ -104,6 +104,7 @@ library
     FSM.LangPretty,
     FSM.LangProcess
   other-modules:
+    FSM.Process.PreviousInputs
     FSM.Process.MakeTailCalls
     FSM.Process.CallGraph
     FSM.Process.ReturningFuns
