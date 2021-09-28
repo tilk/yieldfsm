@@ -28,7 +28,7 @@ primName :: String -> Int -> TH.Name
 primName n k = TH.mkName $ n ++ replicate k '\''
 
 addVar :: TH.Name -> Stmt -> Stmt
-addVar n = SLet VarMut n (VExp $ TH.VarE 'CP.def)
+addVar n = SLet VarMut n (VExp $ TH.VarE 'CP.undefined)
 
 previousInputs :: Prog -> Prog
 previousInputs prog 

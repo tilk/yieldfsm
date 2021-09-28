@@ -12,9 +12,6 @@ import qualified Test.Tasty.HUnit as TU
 
 import FSM
 
-instance CP.Default Bool where
-    def = False
-
 dup :: [a] -> [a]
 dup [] = []
 dup (x:xs) = x:x:dup xs
