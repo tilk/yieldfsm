@@ -2,7 +2,8 @@
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, cutBlocks, removeEpsilon, makeLocalVars,
     makeTailCalls, deTailCall, previousInputs, flattenTuples,
-    foldInit, refreshVars, simplifyCase, simplifyCaseN
+    foldInit, refreshVars, simplifyCase, simplifyCaseN,
+    cleanUnusedConstructors
 ) where
 
 import FSM.Process.MakeTailCalls
@@ -17,4 +18,5 @@ import FSM.Process.FoldInit
 import FSM.Process.SimplifyCase
 import FSM.Process.PreviousInputs
 import FSM.Process.FlattenTuples
+import FSM.Process.CleanUnusedConstructors
 

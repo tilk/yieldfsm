@@ -104,6 +104,7 @@ library
     FSM.LangPretty,
     FSM.LangProcess
   other-modules:
+    FSM.Process.CleanUnusedConstructors
     FSM.Process.FlattenTuples
     FSM.Process.PreviousInputs
     FSM.Process.MakeTailCalls

@@ -25,6 +25,9 @@ instance SC.SetClass s => Monoid (PatFV s) where
 patSingleton :: SC.SetClass s => TH.Name -> PatFV s
 patSingleton n = PatFV (SC.singleton n) mempty
 
+patFreeSingleton :: SC.SetClass s => TH.Name -> PatFV s
+patFreeSingleton n = PatFV mempty (SC.singleton n)
+
 patFreeVars :: (SC.SetClass s, FreeVars a) => a -> PatFV s
 patFreeVars e = PatFV mempty (freeVars e)
 
