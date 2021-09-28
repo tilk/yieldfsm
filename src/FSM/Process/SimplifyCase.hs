@@ -9,6 +9,7 @@ import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
+import qualified FSM.Util.MultiSet as MS
 
 conExp :: [TH.Exp] -> TH.Exp -> Maybe (TH.Name, [TH.Exp])
 conExp es (TH.ConE n) = Just (n, reverse es)
@@ -79,7 +80,7 @@ simplifyCaseCase m (p, s) = (p, simplifyCaseStmt (setVars VarLet (boundVars p) m
 mkLet :: M.Map TH.Name VarKind -> VarKind -> TH.Name -> VStmt -> Stmt -> Stmt
 mkLet m t n vs s
     | VExp e@(TH.VarE n') <- vs, Just VarLet <- M.lookup n' m, canSubst t = simplifyCaseStmt m $ substSingle n e s
-    | VExp e <- vs, isConstantExpr e, canSubst t = simplifyCaseStmt m $ substSingle n e s
+    | VExp e <- vs, isConstantExpr e || S.null (freeVars e `S.difference` M.keysSet (M.filter (== VarLet) m)) && MS.lookup n (freeVars s) <= 1, canSubst t = simplifyCaseStmt m $ substSingle n e s
     | otherwise = SLet t n vs $ simplifyCaseStmt (M.insert n t m) s
     where
     canSubst VarLet = True
