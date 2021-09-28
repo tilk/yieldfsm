@@ -6,65 +6,66 @@ import qualified Data.Map.Strict as M
 import Prelude
 import FSM.Lang
 import Control.Arrow
+import qualified FSM.Util.SetClass as SC
 
 class FreeVars a where
-    freeVars :: a -> S.Set TH.Name
+    freeVars :: SC.SetClass s => a -> s TH.Name
 
 class FreeVarsPat a where
-    freeVarsPat :: a -> PatFV
+    freeVarsPat :: SC.SetClass s => a -> PatFV s
 
-data PatFV = PatFV { patBound :: S.Set TH.Name, patFree :: S.Set TH.Name }
+data PatFV s = PatFV { patBound :: s TH.Name, patFree :: s TH.Name }
 
-instance Semigroup PatFV where
-    PatFV s1 s2 <> PatFV t1 t2 = PatFV (s1 <> t1) (s2 <> t2)
+instance SC.SetClass s => Semigroup (PatFV s) where
+    PatFV s1 s2 <> PatFV t1 t2 = PatFV (s1 `SC.union` t1) (s2 `SC.union` t2)
 
-instance Monoid PatFV where
-    mempty = PatFV S.empty S.empty
+instance SC.SetClass s => Monoid (PatFV s) where
+    mempty = PatFV mempty mempty
 
-patSingleton :: TH.Name -> PatFV
-patSingleton n = PatFV (S.singleton n) S.empty
+patSingleton :: SC.SetClass s => TH.Name -> PatFV s
+patSingleton n = PatFV (SC.singleton n) mempty
 
-patFreeVars :: FreeVars a => a -> PatFV
-patFreeVars e = PatFV S.empty (freeVars e)
+patFreeVars :: (SC.SetClass s, FreeVars a) => a -> PatFV s
+patFreeVars e = PatFV mempty (freeVars e)
 
-underPat :: S.Set TH.Name -> PatFV -> S.Set TH.Name
-underPat s (PatFV bs fs) = fs <> (s `S.difference` bs)
+underPat :: SC.SetClass s => s TH.Name -> PatFV s -> s TH.Name
+underPat s (PatFV bs fs) = fs <> (s `SC.difference` bs)
 
-underPatFV :: PatFV -> PatFV -> PatFV
-underPatFV (PatFV bs1 fs1) (PatFV bs2 fs2) = PatFV (bs1 <> bs2) (fs2 <> (fs1 `S.difference` bs2))
+underPatFV :: SC.SetClass s => PatFV s -> PatFV s -> PatFV s
+underPatFV (PatFV bs1 fs1) (PatFV bs2 fs2) = PatFV (bs1 <> bs2) (fs2 <> (fs1 `SC.difference` bs2))
 
-freeVarsUnderPat :: FreeVarsPat a => S.Set TH.Name -> a -> S.Set TH.Name
+freeVarsUnderPat :: (SC.SetClass s, FreeVarsPat a) => s TH.Name -> a -> s TH.Name
 freeVarsUnderPat s p = s `underPat` freeVarsPat p
 
-boundVars :: FreeVarsPat a => a -> S.Set TH.Name
+boundVars :: (SC.SetClass s, FreeVarsPat a) => a -> s TH.Name
 boundVars = patBound . freeVarsPat
 
 instance FreeVars a => FreeVars (Maybe a) where
-    freeVars = maybe S.empty id . fmap freeVars
+    freeVars = maybe mempty id . fmap freeVars
 
 instance FreeVarsPat a => FreeVarsPat (Maybe a) where
     freeVarsPat = maybe mempty id . fmap freeVarsPat
 
-freeVarsFunMap :: FunMap -> S.Set TH.Name
-freeVarsFunMap = S.unions . map (\(_, (p, s)) -> freeVars s `freeVarsUnderPat` p) . M.toList
+freeVarsFunMap :: SC.SetClass s => FunMap -> s TH.Name
+freeVarsFunMap = mconcat . map (\(_, (p, s)) -> freeVars s `freeVarsUnderPat` p) . M.toList
 
-freeVarsGuardedExp :: (TH.Guard, TH.Exp) -> S.Set TH.Name
+freeVarsGuardedExp :: SC.SetClass s => (TH.Guard, TH.Exp) -> s TH.Name
 freeVarsGuardedExp (g, e) = freeVars e `freeVarsUnderPat` g
 
-freeVarsStmts :: [TH.Stmt] -> S.Set TH.Name
+freeVarsStmts :: SC.SetClass s => [TH.Stmt] -> s TH.Name
 freeVarsStmts = patFree . freeVarsPatStmts
 
-freeVarsPatStmts :: [TH.Stmt] -> PatFV
+freeVarsPatStmts :: SC.SetClass s => [TH.Stmt] -> PatFV s
 freeVarsPatStmts [] = mempty
 freeVarsPatStmts (s:ss) = freeVarsPatStmts ss `underPatFV` freeVarsPat s
 
 instance FreeVars TH.Type where
-    freeVars = const S.empty
+    freeVars = const mempty
 
 instance FreeVars TH.Exp where
-    freeVars (TH.VarE v) = S.singleton v
-    freeVars (TH.ConE _) = S.empty
-    freeVars (TH.LitE _) = S.empty
+    freeVars (TH.VarE v) = SC.singleton v
+    freeVars (TH.ConE _) = mempty
+    freeVars (TH.LitE _) = mempty
     freeVars (TH.AppE e1 e2) = freeVars e1 <> freeVars e2
     freeVars (TH.AppTypeE e _ ) = freeVars e
     freeVars (TH.InfixE me1 e me2) = freeVars e <> freeVars me1 <> freeVars me2
@@ -88,9 +89,9 @@ instance FreeVars TH.Exp where
     freeVars (TH.RecConE _ fes) = mconcat $ map (freeVars . snd) fes
     freeVars (TH.RecUpdE e fes) = freeVars e <> (mconcat $ map (freeVars . snd) fes)
     freeVars (TH.StaticE e) = freeVars e
-    freeVars (TH.UnboundVarE _) = S.empty
-    freeVars (TH.LabelE _) = S.empty
-    freeVars (TH.ImplicitParamVarE _) = S.empty
+    freeVars (TH.UnboundVarE _) = mempty
+    freeVars (TH.LabelE _) = mempty
+    freeVars (TH.ImplicitParamVarE _) = mempty
 
 instance FreeVars TH.Range where
     freeVars (TH.FromR e) = freeVars e
@@ -160,14 +161,14 @@ instance FreeVars Stmt where
     freeVars (SFun fs s) = freeVars s <> freeVarsFunMap fs
     freeVars (SBlock ss) = freeVars ss
     freeVars (SIf e s1 s2) = freeVars e <> freeVars s1 <> freeVars s2
-    freeVars (SCase e cs) = freeVars e <> S.unions (flip map cs $ \(p, s) -> freeVars s `freeVarsUnderPat` p)
-    freeVars (SNop) = S.empty
+    freeVars (SCase e cs) = freeVars e <> mconcat (flip map cs $ \(p, s) -> freeVars s `freeVarsUnderPat` p)
+    freeVars (SNop) = mempty
 
 instance FreeVars Prog where
-    freeVars prog = freeVars (progBody prog) `S.difference` boundVars (progInputs prog) `S.difference` boundVars (progParams prog)
+    freeVars prog = freeVars (progBody prog) `SC.difference` boundVars (progInputs prog) `SC.difference` boundVars (progParams prog)
 
 instance FreeVars a => FreeVars [a] where
-    freeVars ss = S.unions $ map freeVars ss
+    freeVars ss = mconcat $ map freeVars ss
 
 instance FreeVarsPat a => FreeVarsPat [a] where
     freeVarsPat ss = mconcat $ map freeVarsPat ss
@@ -273,7 +274,7 @@ substStmts su (s:ss) = subst su s:substStmts (cutSubstPat s su) ss
 substGuardedExp :: M.Map TH.Name TH.Exp -> (TH.Guard, TH.Exp) -> (TH.Guard, TH.Exp)
 substGuardedExp s (g, e) = (subst s g, subst (cutSubstPat g s) e)
 
-cutSubst :: PatFV -> M.Map TH.Name a -> M.Map TH.Name a
+cutSubst :: PatFV S.Set -> M.Map TH.Name a -> M.Map TH.Name a
 cutSubst (PatFV vs _) s = M.withoutKeys s vs
 
 cutSubstPat :: FreeVarsPat a => a -> M.Map TH.Name b -> M.Map TH.Name b

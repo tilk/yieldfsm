@@ -121,6 +121,8 @@ library
     FSM.Process.SimplifyCase
     FSM.Util.MonadRefresh
     FSM.Util.MonadUnique
+    FSM.Util.MultiSet
+    FSM.Util.SetClass
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with yieldfsm project in scope
