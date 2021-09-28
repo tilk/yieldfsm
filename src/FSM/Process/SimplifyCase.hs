@@ -3,7 +3,6 @@ module FSM.Process.SimplifyCase(simplifyCase, simplifyCaseN) where
 import FSM.Lang
 import FSM.FreeVars
 import Prelude
-import Control.Arrow
 import Control.Monad
 import Control.Applicative
 import Data.Maybe
@@ -61,15 +60,15 @@ mmaybe a _ MNoNo = a
 
 simplifyCase1 :: M.Map TH.Name VarKind -> TH.Exp -> TH.Pat -> Stmt -> MMaybe Stmt
 simplifyCase1 m e (TH.VarP n) s = MJust $ mkLet m VarLet n (VExp e) s
-simplifyCase1 m (TH.LitE l) (TH.LitP l') s | l == l' = MJust s
-simplifyCase1 m e (TH.LitP _) _ | matchableExp e = MNo
+simplifyCase1 _ (TH.LitE l) (TH.LitP l') s | l == l' = MJust s
+simplifyCase1 _ e (TH.LitP _) _ | matchableExp e = MNo
 simplifyCase1 m (TH.TupE mes) (TH.TupP ps) s
     | length mes == length ps, all isJust mes = foldM (flip $ uncurry $ simplifyCase1 m) s $ zip (map fromJust mes) ps
-simplifyCase1 m e (TH.TupP _) _ | matchableExp e = MNo
+simplifyCase1 _ e (TH.TupP _) _ | matchableExp e = MNo
 simplifyCase1 m e (TH.ConP n ps) s 
     | Just (n', es) <- conExp [] e, n == n', length es == length ps = foldM (flip $ uncurry $ simplifyCase1 m) s $ zip es ps
-simplifyCase1 m e (TH.ConP _ _) _ | matchableExp e = MNo
-simplifyCase1 m _ _ _ = MNoNo
+simplifyCase1 _ e (TH.ConP _ _) _ | matchableExp e = MNo
+simplifyCase1 _ _ _ _ = MNoNo
 
 simplifyCaseDo :: M.Map TH.Name VarKind -> TH.Exp -> [(TH.Pat, Stmt)] -> Stmt
 simplifyCaseDo m e cs = mmaybe (SCase e (map (simplifyCaseCase m) cs)) id $ msum (map (uncurry $ simplifyCase1 m e) cs)
@@ -88,13 +87,13 @@ mkLet m t n vs s
 
 simplifyCaseStmt :: M.Map TH.Name VarKind -> Stmt -> Stmt
 simplifyCaseStmt m   (SCase e cs) = simplifyCaseDo m e cs
-simplifyCaseStmt m e@(SRet _) = e
-simplifyCaseStmt m e@(SAssign _ _) = e
-simplifyCaseStmt m e@(SYield _) = e
+simplifyCaseStmt _ e@(SRet _) = e
+simplifyCaseStmt _ e@(SAssign _ _) = e
+simplifyCaseStmt _ e@(SYield _) = e
 simplifyCaseStmt m   (SFun fs s) = SFun (simplifyCaseFunMap m fs) (simplifyCaseStmt m s)
 simplifyCaseStmt m   (SBlock ss) = SBlock $ map (simplifyCaseStmt m) ss
 simplifyCaseStmt m   (SIf e st sf) = SIf e (simplifyCaseStmt m st) (simplifyCaseStmt m sf)
-simplifyCaseStmt m e@SNop = e
+simplifyCaseStmt _ e@SNop = e
 simplifyCaseStmt m   (SLet t n vs s) = mkLet m t n vs s
 
 simplifyCaseFunMap :: M.Map TH.Name VarKind -> FunMap -> FunMap

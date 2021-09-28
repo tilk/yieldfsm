@@ -3,9 +3,6 @@ module FSM.Process.RefreshVars(refreshVars) where
 import FSM.Lang
 import FSM.FreeVars
 import Prelude
-import Data.Maybe
-import Control.Monad
-import Data.Key(forWithKeyM)
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 import FSM.Util.MonadRefresh
