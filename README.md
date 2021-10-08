@@ -208,11 +208,71 @@ forever:
 
 ### Parameters
 
-TODO
+If the automaton needs to be configured in some manner, parameters are useful.
+Parameters allow to make the automaton dependent on a value which is not a signal.
+The following code describes a counter with a configurable maximum value.
+
+```
+[fsm|counter_param :: (HiddenClockResetEnable dom, Num a, NFDataX a)
+                   => a -> Signal dom a
+param m
+var x = 0
+forever:
+    yield x
+    if x == m:
+        x = 0
+    else:
+        x = x + 1
+|]
+```
 
 ### Functions
 
-TODO
+YieldFSM allows to define functions for managing control flow and factoring out common functionality.
+In fact, functions are the core abstraction of YieldFSM: the loops described above are a syntactic sugar for certain forms of functions.
+Because of syntactic limitations, function calls can be used only as separate statements or on the top level of assignments, `let` statements and function returns.
+
+Function calls at function returns are tail calls.
+They can be used to specify control flow.
+For example, the following code is equivalent to the `toggle2` example described earlier.
+
+```
+[fsm|toggle2_tail :: HiddenClockResetEnable dom => Signal dom Bit
+fun f b:
+    yield b
+    ret call f (complement b)
+ret call f b
+|]
+```
+
+Multiple functions defined at the same level can call each other recursively.
+For example, the following code describes an automaton which toggles its output every two cycles.
+
+```
+[fsm|toggletwo_tail :: HiddenClockResetEnable dom => Signal dom Bit
+fun f b:
+    yield b
+    ret call g b
+fun g b:
+    yield b
+    ret call f (complement b)
+ret call f b
+|]
+```
+
+Non-tail calls allow to factor out common functionality.
+Recursion using non-tail calls is disallowed, as automata in general don't have a stack to store call frames.
+The following code is a different description of an automaton presented above.
+
+```
+[fsm|toggletwo :: HiddenClockResetEnable dom => Signal dom Bit
+fun f b:
+    yield b
+    yield b
+forever:
+    call f low
+    call f high
+```
 
 ## Syntax
 
