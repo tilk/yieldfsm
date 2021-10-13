@@ -18,7 +18,7 @@ optimize :: NProg -> NProg
 optimize np | np == np' = np'
             | otherwise = optimize np'
     where
-    np' = cleanUnusedArgs . flattenTuples . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN $ np
+    np' = cleanUnusedArgs . propagateConstCalls . flattenTuples . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN $ np
 
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str = do

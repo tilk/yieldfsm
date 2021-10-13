@@ -262,7 +262,7 @@ forever:
 [fsm|countEnMealyFSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
-var x = 0
+var x = 0 :: Integer
 forever:
     if b:
         x = x + 1
@@ -272,7 +272,7 @@ forever:
 [fsm|countEnDelayFSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
-var x = 0
+var x = 0 :: Integer
 forever:
     yield x
     if b:
@@ -282,7 +282,7 @@ forever:
 [fsm|countEnDelayFlipFSM :: (CP.HiddenClockResetEnable dom)
                          => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
-var x = 0
+var x = 0 :: Integer
 yield x
 forever:
     if b:
@@ -293,7 +293,7 @@ forever:
 [fsm|countEnDelay2FSM :: (CP.HiddenClockResetEnable dom)
                       => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
-var x = 0
+var x = 0 :: Integer
 forever:
     yield x
     if b:
@@ -309,13 +309,13 @@ input b
 fun f x:
     yield x
     ret call f (x + if b then 1 else 0)
-ret call f 0
+ret call f (0 :: Integer)
 |]
 
 [fsm|countEnDelayContinueFSM :: (CP.HiddenClockResetEnable dom)
                              => CP.Signal dom Bool -> CP.Signal dom Integer
 input b
-var x = 0
+var x = 0 :: Integer
 forever:
     yield x
     if not b:
