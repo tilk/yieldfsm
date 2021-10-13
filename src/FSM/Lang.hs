@@ -8,7 +8,7 @@ type FunMap = M.Map TH.Name (TH.Pat, Stmt)
 
 data VStmt = VExp TH.Exp
            | VCall TH.Name TH.Exp
-    deriving Show
+    deriving (Show, Eq)
 
 data VarKind = VarLet | VarMut deriving (Show, Eq)
 
@@ -21,7 +21,7 @@ data Stmt = SLet VarKind TH.Name VStmt Stmt
           | SIf TH.Exp Stmt Stmt
           | SCase TH.Exp [(TH.Pat, Stmt)]
           | SNop
-    deriving Show
+    deriving (Show, Eq)
 
 data Prog = Prog {
     progName :: TH.Name,
@@ -29,7 +29,7 @@ data Prog = Prog {
     progParams :: [TH.Pat],
     progInputs :: Maybe TH.Pat,
     progBody :: Stmt
-} deriving Show
+} deriving (Show, Eq)
 
 data NProg = NProg {
     nProgName :: TH.Name,
@@ -40,7 +40,7 @@ data NProg = NProg {
     nProgInit :: TH.Name,
     nProgInitParam :: TH.Exp,
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
-} deriving Show
+} deriving (Show, Eq)
 
 sBlock :: [Stmt] -> Stmt
 sBlock [] = SNop

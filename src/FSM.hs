@@ -14,6 +14,12 @@ import Prelude
 import Text.Megaparsec
 import System.IO
 
+optimize :: NProg -> NProg
+optimize np | np == np' = np'
+            | otherwise = optimize np'
+    where
+    np' = cleanUnusedArgs . flattenTuples . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN $ np
+
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str = do
     pr <- runParseProg str
@@ -36,7 +42,7 @@ mkFSM str = do
             np' <- foldInit . simplifyCaseN <$> makeTailCalls np0
             TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
-            np'' <- cleanUnusedArgs . flattenTuples . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN <$> removeEpsilon np'
+            np'' <- optimize <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
             ret <- compileFSM (nprog2desc np'')
