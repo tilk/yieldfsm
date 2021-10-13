@@ -36,7 +36,7 @@ mkFSM str = do
             np' <- foldInit . simplifyCaseN <$> makeTailCalls np0
             TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
-            np'' <- cleanUnusedArgs . flattenTuples . cleanUnusedConstructors . simplifyCaseN <$> removeEpsilon np'
+            np'' <- cleanUnusedArgs . flattenTuples . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
             ret <- compileFSM (nprog2desc np'')
