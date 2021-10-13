@@ -1,9 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
-module FSM.Desc where
+module FSM.Desc(Transition(..), DecisionTree(..), FSMState(..), MemInfo(..), FSM(..)) where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 import Prelude
+import FSM.Lang(MemInfo(..))
 
 data Transition = Transition {
     transOutput :: TH.Exp,
@@ -27,6 +28,7 @@ data FSM = FSM {
     fsmParams :: [TH.Pat],
     fsmStates :: M.Map TH.Name FSMState,
     fsmInputs :: Maybe TH.Pat,
+    fsmMemories :: M.Map TH.Name MemInfo,
     fsmInitState :: TH.Name,
     fsmInitStateParam :: TH.Exp,
     fsmConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])

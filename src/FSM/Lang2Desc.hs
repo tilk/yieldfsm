@@ -19,14 +19,15 @@ fun2state :: (TH.Pat, Stmt) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree Nothing s)
 
 nprog2desc :: NProg -> FSM
-nprog2desc (NProg n t ps is fs f1 e1 cs) = FSM { 
-    fsmName = n,
-    fsmType = t,
-    fsmParams = ps,
-    fsmStates = M.map fun2state fs,
-    fsmInputs = is,
-    fsmInitState = f1,
-    fsmInitStateParam = e1,
-    fsmConts = cs
+nprog2desc prog = FSM { 
+    fsmName = nProgName prog,
+    fsmType = nProgType prog,
+    fsmParams = nProgParams prog,
+    fsmStates = M.map fun2state $ nProgFuns prog,
+    fsmInputs = nProgInputs prog,
+    fsmMemories = nProgMemories prog,
+    fsmInitState = nProgInit prog,
+    fsmInitStateParam = nProgInitParam prog,
+    fsmConts = nProgConts prog
 }
 

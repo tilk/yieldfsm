@@ -55,9 +55,6 @@ lambdaLiftVStmt    (VCall n e) = do
 lambdaLift :: MonadRefresh m => Prog -> m NProg
 lambdaLift prog = do
     (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVars $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
-    case s of
-        SRet (VCall f e) -> return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) fm f e M.empty
-        _ -> do
-            f <- refreshName $ TH.mkName "init"
-            return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) (M.insert f (tupP [], s) fm) f (tupE []) M.empty
+    f <- refreshName $ TH.mkName "init"
+    return $ NProg (progName prog) (progType prog) (progParams prog) (progInputs prog) (progMemories prog) (M.insert f (tupP [], s) fm) f (tupE []) M.empty
 

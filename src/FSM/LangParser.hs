@@ -302,7 +302,7 @@ parseProg = do
     ps <- many (parseHsFoldSymbol "param" stringToHsPat)
     is <- (Just <$> parseHsFoldSymbol "input" stringToHsPat) <|> return Nothing
     s <- locally prDataInputs (S.union $ boundVars is) $ locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ parseBasicStmt
-    return $ Prog i t ps is s
+    return $ Prog i t ps is M.empty s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
 runParseProg s = fmap fst <$> (runParserT (runWriterT (runReaderT parseProg prData)) "" s)

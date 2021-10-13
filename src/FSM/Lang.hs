@@ -23,11 +23,16 @@ data Stmt = SLet VarKind TH.Name VStmt Stmt
           | SNop
     deriving (Show, Eq)
 
+data MemInfo = MemInfo {
+    memSize :: Int
+} deriving (Show, Eq)
+
 data Prog = Prog {
     progName :: TH.Name,
     progType :: TH.Type,
     progParams :: [TH.Pat],
     progInputs :: Maybe TH.Pat,
+    progMemories :: M.Map TH.Name MemInfo,
     progBody :: Stmt
 } deriving (Show, Eq)
 
@@ -36,6 +41,7 @@ data NProg = NProg {
     nProgType :: TH.Type,
     nProgParams :: [TH.Pat],
     nProgInputs :: Maybe TH.Pat,
+    nProgMemories :: M.Map TH.Name MemInfo,
     nProgFuns :: FunMap,
     nProgInit :: TH.Name,
     nProgInitParam :: TH.Exp,
