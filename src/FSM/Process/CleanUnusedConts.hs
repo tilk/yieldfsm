@@ -135,8 +135,9 @@ cleanUnusedConts :: NProg -> NProg
 cleanUnusedConts prog = prog {
         nProgFuns = cleanContsFunMap ns $ nProgFuns prog,
         nProgInitParam = cleanConts ns $ nProgInitParam prog,
-        nProgConts = M.filter ((> 1) . M.size) $ nProgConts prog
+        nProgConts = (`M.difference` smallConts) $ nProgConts prog
     }
     where
-    ns = S.unions $ map (M.keysSet) $ M.elems $ nProgConts prog
+    smallConts = M.filter ((<= 1) . M.size) $ nProgConts prog
+    ns = S.unions $ map (M.keysSet) $ M.elems smallConts
 
