@@ -26,6 +26,7 @@ countSlowOpt n (True:xs) = n:f xs where
 main :: IO ()
 main = defaultMain $ testGroup "." [ 
     testOscillator @CP.System "oscilAssign" oscilAssignFSM,
+    testOscillator @CP.System "oscilMomentary" (snd <$> oscilMomentaryFSM),
     testOscillator @CP.System "oscilVar" oscilVarFSM,
     testOscillator @CP.System "oscilVar2" oscilVar2FSM,
     testOscillator @CP.System "oscilCall" oscilCallFSM,
@@ -109,6 +110,15 @@ forever:
     yield x
     x = not x
     yield x
+|]
+
+[fsm|oscilMomentaryFSM :: (CP.HiddenClockResetEnable dom)
+                    => CP.Signal dom ((), Bool)
+ovar momentary x = False
+forever:
+    yield ()
+    x = True
+    yield ()
 |]
 
 [fsm|oscilVarFSM :: (CP.HiddenClockResetEnable dom)
