@@ -16,7 +16,6 @@ import Control.Monad.Writer
 import Control.Lens hiding (noneOf)
 import Prelude
 import Data.Void
-import Data.Char(isSpace)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
@@ -50,9 +49,6 @@ instance Monoid PWData where
 
 type Parser = ReaderT PRData (WriterT PWData (ParsecT Void String TH.Q))
 
-isHSpace :: Char -> Bool
-isHSpace x = isSpace x && x /= '\n' && x /= '\r'
-
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
 
@@ -62,11 +58,8 @@ scn = L.space (void spaceChar) lineComment empty
 sc :: Parser ()
 sc = L.space (void $ oneOf " \t") lineComment empty
 
-myspace :: (MonadParsec e s m, Token s ~ Char) => m ()
-myspace = void $ takeWhileP (Just "white space") isHSpace
-
-symbol :: String -> Parser String
-symbol = L.symbol myspace
+symbol :: Parser () -> String -> Parser String
+symbol sc' = L.symbol sc' 
 
 symbolic :: Parser () -> Char -> Parser Char
 symbolic sc' = L.lexeme sc' . char
@@ -90,9 +83,6 @@ e2m (Right r) = do
 
 newlineOrEof :: Parser ()
 newlineOrEof = (newline *> return ()) <|> eof
-
-ssymbol :: String -> Parser String
-ssymbol s = (try $ scn *> symbol s) <?> s
 
 myDefaultParseMode :: HE.ParseMode
 myDefaultParseMode = HE.defaultParseMode
@@ -152,10 +142,10 @@ parseHsFoldSymbol s = parseHsFold (\sc' -> L.symbol sc' s >> return id)
 --idStyle = haskellIdents { _styleReserved = HS.fromList ["nop", "var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
 
 singleSymbol :: String -> Parser ()
-singleSymbol s = ssymbol s *> newlineOrEof
+singleSymbol s = symbol sc s *> newlineOrEof
 
 singleSymbolColon :: String -> Parser ()
-singleSymbolColon s = ssymbol s *> single ':' *> newlineOrEof
+singleSymbolColon s = symbol sc s *> single ':' *> newlineOrEof
 
 parseName :: Parser () -> Parser TH.Name
 parseName sc' = TH.mkName <$> ident sc'
@@ -302,6 +292,7 @@ parseProg = do
     ps <- many (parseHsFoldSymbol "param" stringToHsPat)
     is <- (Just <$> parseHsFoldSymbol "input" stringToHsPat) <|> return Nothing
     s <- locally prDataInputs (S.union $ boundVars is) $ locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ parseBasicStmt
+    scn *> eof
     return $ Prog i t ps is s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
