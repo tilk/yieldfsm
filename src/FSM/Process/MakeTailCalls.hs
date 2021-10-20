@@ -104,7 +104,7 @@ makeTailCalls prog = evalUniqueT $ do
     return $ prog { nProgFuns = M.fromList $ apfs ++ fsd, nProgConts = M.unions cdefs `M.union` nProgConts prog }
     where
     fvs = freeVarsFunMap $ nProgFuns prog
-    part = tailCallSCCFunMap $ nProgFuns prog
+    part = tailCallSCCN prog
     name = TH.nameBase $ nProgName prog
     rfs = returningFunsFlat (nProgFuns prog)
     apf cdmap (pid, (_ctn, an))

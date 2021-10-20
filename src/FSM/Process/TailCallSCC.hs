@@ -1,4 +1,4 @@
-module FSM.Process.TailCallSCC(Partition(..), partitionLookup, tailCallSCCFunMap, tailCallSCC) where
+module FSM.Process.TailCallSCC(Partition(..), partitionLookup, tailCallSCCFunMap, tailCallSCC, tailCallSCCN) where
 
 import FSM.Lang
 import Prelude
@@ -44,6 +44,12 @@ tailCallSCCGen gr fs x = Partition pMap pSets
 tailCallSCCFunMap :: FunMap -> Partition TH.Name
 tailCallSCCFunMap = tailCallSCCGen callGraphFlat M.keys
 
-tailCallSCC :: Stmt -> Partition TH.Name
-tailCallSCC = tailCallSCCGen callGraph (S.toList . funsStmt)
+tailCallSCCStmt :: Stmt -> Partition TH.Name
+tailCallSCCStmt = tailCallSCCGen callGraph (S.toList . funsStmt)
+
+tailCallSCC :: Prog -> Partition TH.Name
+tailCallSCC = tailCallSCCStmt . progBody
+
+tailCallSCCN :: NProg -> Partition TH.Name
+tailCallSCCN = tailCallSCCGen callGraphNProg (M.keys . nProgFuns)
 

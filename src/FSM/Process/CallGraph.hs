@@ -1,4 +1,4 @@
-module FSM.Process.CallGraph(CGEdge(..), CG, callGraph, callGraphFlat, callGraphFunMap) where
+module FSM.Process.CallGraph(CGEdge(..), CG, callGraph, callGraphFlat, callGraphProg, callGraphNProg) where
 
 import FSM.Lang
 import Prelude
@@ -9,6 +9,7 @@ import qualified Language.Haskell.TH as TH
 data CGEdge = CGEdge {
     cgEdgeSrc :: TH.Name,
     cgEdgeDst :: TH.Name,
+    cgEdgeArg :: TH.Exp,
     cgEdgeTail :: Bool
 }
 
@@ -36,5 +37,11 @@ callGraphStmt n (SFun fs s) = callGraphFunMap n fs s
 
 callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
 callGraphVStmt _ _ (VExp _) = mzero
-callGraphVStmt n t (VCall n' _) = return $ CGEdge n n' t
+callGraphVStmt n t (VCall n' e) = return $ CGEdge n n' e t
+
+callGraphProg :: Prog -> CG
+callGraphProg prog = callGraph $ progBody prog
+
+callGraphNProg :: NProg -> CG
+callGraphNProg prog = CGEdge (TH.mkName "INIT") (nProgInit prog) (nProgInitParam prog) True : callGraphFlat (nProgFuns prog)
 
