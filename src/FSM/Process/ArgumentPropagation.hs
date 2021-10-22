@@ -31,7 +31,7 @@ makeGraph fs = concatMap edgeVals
                | otherwise = []
 
 edgeMap :: [(GNode, GNode)] -> M.Map GNode (S.Set GNode)
-edgeMap = M.unionsWith S.union . map (M.map S.singleton . uncurry M.singleton)
+edgeMap edges = M.unionsWith S.union . (map (flip M.singleton S.empty . snd) edges ++) . map (M.map S.singleton . uncurry M.singleton) $ edges
 
 findSCC :: [(GNode, GNode)] -> [S.Set GNode]
 findSCC = map (S.fromList . flattenSCC) . stronglyConnComp . map toSCC . M.toList . edgeMap
