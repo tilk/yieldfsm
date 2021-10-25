@@ -25,10 +25,11 @@ countSlowOpt n (True:xs) = n:f xs where
 
 main :: IO ()
 main = defaultMain $ testGroup "." [ 
-    testOscillator @CP.System "oscilAssign" oscilAssignFSM,
+{-    testOscillator @CP.System "oscilAssign" oscilAssignFSM,
     testOscillator @CP.System "oscilVar" oscilVarFSM,
-    testOscillator @CP.System "oscilVar2" oscilVar2FSM,
+    testOscillator @CP.System "oscilVar2" oscilVar2FSM,-}
     testOscillator @CP.System "oscilCall" oscilCallFSM,
+    testOscillator @CP.System "oscilCall2" oscilCall2FSM{-,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
@@ -57,7 +58,7 @@ main = defaultMain $ testGroup "." [
     testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM,
     testCounterUpDown @CP.System "countUpDownWhileCall" countUpDownWhileCallFSM,
     testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM,
-    testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM]
+    testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM-}]
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= take 100 (cycle [False, True])
@@ -89,7 +90,7 @@ main = defaultMain $ testGroup "." [
     testCounterUpDownSlow name machine = TH.testProperty name $ H.property $ do
         m <- H.forAll $ Gen.integral $ Range.constant 1 100
         tail (CP.sampleN 101 (machine m)) H.=== take 100 (dup $ cycle $ [0..m-1] ++ [m,m-1..1])
-
+{-
 [fsm|oscilLiftFSM :: (CP.HiddenClockResetEnable dom)
                   => CP.Signal dom Bool
 fun f ():
@@ -126,7 +127,7 @@ forever:
     yield x
     x = not x
 |]
-
+-}
 [fsm|oscilCallFSM :: (CP.HiddenClockResetEnable dom)
                   => CP.Signal dom Bool
 var x = True
@@ -137,6 +138,16 @@ forever:
     yield x
 |]
 
+[fsm|oscilCall2FSM :: (CP.HiddenClockResetEnable dom)
+                   => CP.Signal dom Bool
+var x = False
+fun n ():
+    x = not x
+forever:
+    yield x
+    call n ()
+|]
+{-
 [fsm|countFSM :: (CP.HiddenClockResetEnable dom) 
               => CP.Signal dom Integer
 fun f i:
@@ -482,4 +493,4 @@ forever:
         i = i - 1
     while i /= 0
 |]
-
+-}
