@@ -17,6 +17,7 @@ data GNode = GNode {
     gNodeExp :: TH.Exp
 } deriving (Ord, Eq, Show)
 
+-- TODO: support ConP, LitP... see SimplifyCase
 nodePairs :: CGEdge -> TH.Pat -> [(GNode, GNode)]
 nodePairs ce p = f (cgEdgeArg ce) p
     where

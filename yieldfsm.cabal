@@ -104,6 +104,7 @@ library
     FSM.LangPretty,
     FSM.LangProcess
   other-modules:
+    FSM.Process.IntegrateCase
     FSM.Process.ArgumentPropagation
     FSM.Process.CleanUnusedConts
     FSM.Process.CleanUnusedArgs
