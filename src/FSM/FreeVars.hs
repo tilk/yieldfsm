@@ -315,6 +315,45 @@ rename su = subst (M.map TH.VarE su)
 renameSingle :: Subst a => TH.Name -> TH.Name -> a -> a
 renameSingle n n' = substSingle n (TH.VarE n')
 
+boundAsVars :: TH.Pat -> S.Set TH.Name
+boundAsVars (TH.LitP _) = mempty
+boundAsVars (TH.VarP n) = mempty
+boundAsVars (TH.TupP ps) = mconcat $ map boundAsVars ps
+boundAsVars (TH.UnboxedTupP ps) = mconcat $ map boundAsVars ps
+boundAsVars (TH.UnboxedSumP p _ _) = boundAsVars p
+boundAsVars (TH.ConP _ ps) = mconcat $ map boundAsVars ps
+boundAsVars (TH.InfixP p1 _ p2) = boundAsVars p1 <> boundAsVars p2
+boundAsVars (TH.UInfixP p1 _ p2) = boundAsVars p1 <> boundAsVars p2
+boundAsVars (TH.ParensP p) = boundAsVars p
+boundAsVars (TH.TildeP p) = boundAsVars p
+boundAsVars (TH.BangP p) = boundAsVars p
+boundAsVars (TH.AsP n p) = boundAsVars p <> S.singleton n
+boundAsVars (TH.WildP) = mempty
+boundAsVars (TH.RecP _ fps) = mconcat $ map (boundAsVars . snd) fps
+boundAsVars (TH.ListP ps) = mconcat $ map boundAsVars ps
+boundAsVars (TH.SigP p _) = boundAsVars p
+boundAsVars (TH.ViewP e p) = boundAsVars p
+
+substPat :: M.Map TH.Name TH.Pat -> TH.Pat -> TH.Pat
+substPat _ p@(TH.LitP _) = p
+substPat s p@(TH.VarP n) | Just p' <- M.lookup n s = p'
+                         | otherwise = p
+substPat s   (TH.TupP ps) = TH.TupP (map (substPat s) ps)
+substPat s   (TH.UnboxedTupP ps) = TH.UnboxedTupP (map (substPat s) ps)
+substPat s   (TH.UnboxedSumP p al ar) = TH.UnboxedSumP (substPat s p) al ar
+substPat s   (TH.ConP n ps) = TH.ConP n (map (substPat s) ps)
+substPat s   (TH.InfixP p1 n p2) = TH.InfixP (substPat s p1) n (substPat s p2)
+substPat s   (TH.UInfixP p1 n p2) = TH.UInfixP (substPat s p1) n (substPat s p2)
+substPat s   (TH.ParensP p) = TH.ParensP (substPat s p)
+substPat s   (TH.TildeP p) = TH.TildeP (substPat s p)
+substPat s   (TH.BangP p) = TH.BangP (substPat s p)
+substPat s   (TH.AsP n p) | Just p' <- M.lookup n s = let TH.VarP n' = p' in TH.AsP n' (substPat s p)
+                          | otherwise = TH.AsP n (substPat s p)
+substPat _ p@(TH.WildP) = p
+substPat s   (TH.RecP n fps) = TH.RecP n ((id *** substPat s) <$> fps)
+substPat s   (TH.ListP ps) = TH.ListP (map (substPat s) ps)
+substPat s   (TH.SigP p t) = TH.SigP (substPat s p) t
+
 isConstantExpr :: TH.Exp -> Bool
 isConstantExpr (TH.VarE _) = False
 isConstantExpr (TH.ConE _) = True
