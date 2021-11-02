@@ -1,4 +1,4 @@
-module FSM.Process.TailCallSCC(Partition(..), partitionLookup, tailCallSCCFunMap, tailCallSCC, tailCallSCCN) where
+module FSM.Process.TailCallSCC(Partition(..), partitionSet, partitionLookup, tailCallSCCFunMap, tailCallSCC, tailCallSCCN) where
 
 import FSM.Lang
 import Prelude
@@ -23,21 +23,27 @@ funsStmt SNop = S.empty
 
 data Partition a = Partition {
     partitionMap :: M.Map a Int,
-    partitionSets :: M.Map Int (S.Set a)
+    partitionSets :: M.Map Int (S.Set a),
+    partitionEdges :: S.Set (Int, Int)
 } deriving Show
 
 partitionLookup :: Ord a => a -> Partition a -> Int
 partitionLookup k = fromJust . M.lookup k . partitionMap
 
+partitionSet :: Int -> Partition a -> S.Set a
+partitionSet n = fromJust . M.lookup n . partitionSets
+
 tailCallSCCGen :: (a -> CG) -> (a -> [TH.Name]) -> a -> Partition TH.Name
-tailCallSCCGen gr fs x = Partition pMap pSets
+tailCallSCCGen gr fs x = Partition pMap pSets pEdges
     where
     pMap = M.unions $ (\(i, is) -> map (`M.singleton` i) is) =<< sccs
     pSets = M.fromList $ map (id *** S.fromList) sccs
+    pEdges = S.fromList $ filter (uncurry (/=)) $ map (pLookup . cgEdgeSrc &&& pLookup . cgEdgeDst) edges
+    pLookup = fromJust . flip M.lookup pMap
     sccs = zip [0..] $ map flattenSCC $ stronglyConnComp graph
-    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (fs x) ++) $ map edgeToGr $ gr x
-    edgeToGr e | cgEdgeTail e = M.singleton (cgEdgeSrc e) (S.singleton $ cgEdgeDst e)
-               | otherwise = M.empty
+    edges = filter cgEdgeTail $ gr x
+    graph = map toSCC $ M.toList $ M.unionsWith S.union $ (map funToGr (fs x) ++) $ map edgeToGr edges
+    edgeToGr e = M.singleton (cgEdgeSrc e) (S.singleton $ cgEdgeDst e)
     funToGr n = M.singleton n S.empty
     toSCC (n, ns) = (n, n, S.toList ns)
 

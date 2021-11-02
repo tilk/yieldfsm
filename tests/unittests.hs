@@ -57,6 +57,7 @@ main = defaultMain $ testGroup "." [
     testCounterUpDown @CP.System "countUpDown" countUpDownFSM,
     testCounterUpDown @CP.System "countUpDownWhile" countUpDownWhileFSM,
     testCounterUpDown @CP.System "countUpDownWhileCall" countUpDownWhileCallFSM,
+    testCounterUpDown @CP.System "countUpDownWhileCall1" countUpDownWhileCall1FSM,
     testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM,
     testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM]
     where
@@ -439,6 +440,23 @@ forever:
         yield i
         i = i - 1
     while i /= 0
+|]
+
+[fsm|countUpDownWhileCall1FSM :: (CP.HiddenClockResetEnable dom)
+                              => Integer -> CP.Signal dom Integer
+param m
+var i = 0
+fun f ():
+    do:
+        yield i
+        i = i + 1
+    until i == m
+    do:
+        yield i
+        i = i - 1
+    while i /= 0
+forever:
+    call f ()
 |]
 
 [fsm|countUpDownWhileCallFSM :: (CP.HiddenClockResetEnable dom)
