@@ -64,7 +64,7 @@ makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
                 | Just icn <- M.lookup (b, b') partInj -> do
                     tell [ContData cn fn f n vs e' (ContTgtFunContInj f' icn)]
                     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
-                | otherwise -> error "unsupported tail call"
+                | otherwise -> error "should not happen"
                     where
                     b' = partitionLookup f' part
             VExp e' -> do
@@ -81,9 +81,14 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
     else do
         part <- view tcDataPartition
         b <- flip partitionLookup part <$> view tcDataName
-        unless (b == partitionLookup f part) $ error "unsupported tail call"
+        let b' = partitionLookup f part
+        partInj <- view tcDataPartInj
+        let inj = case M.lookup (b, b') partInj of
+                    Just icn -> TH.AppE (TH.ConE icn)
+                    Nothing | b == b' -> id
+                            | otherwise -> error "should not happen"
         cfn <- view tcDataCont
-        return $ SRet $ VCall f $ tupE [e, TH.VarE cfn]
+        return $ SRet $ VCall f $ tupE [e, inj $ TH.VarE cfn]
 makeTailCallsStmt   (SBlock [SYield e,s]) = (\s' -> SBlock [SYield e, s']) <$> makeTailCallsStmt s
 makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
 

@@ -30,6 +30,7 @@ main = defaultMain $ testGroup "." [
     testOscillator @CP.System "oscilVar2" oscilVar2FSM,
     testOscillator @CP.System "oscilCall" oscilCallFSM,
     testOscillator @CP.System "oscilCall2" oscilCall2FSM,
+    testOscillator @CP.System "oscilCall3" oscilCall3FSM,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
@@ -146,6 +147,15 @@ fun n ():
     x = not x
 forever:
     yield x
+    call n ()
+|]
+
+[fsm|oscilCall3FSM :: (CP.HiddenClockResetEnable dom)
+                   => CP.Signal dom Bool
+fun n ():
+    yield False
+    yield True
+forever:
     call n ()
 |]
 
