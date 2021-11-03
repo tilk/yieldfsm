@@ -42,10 +42,10 @@ mkFSM str = do
             np' <- foldInit . simplifyCaseN <$> makeTailCalls np0
             TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
-            np'' <- removeEpsilon np'
+            np'' <- testFreshness <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
-            let np''' = optimize np''
+            let np''' = testFreshness $ optimize np''
             TH.runIO $ hPutStrLn stderr $ "optimize:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'''
             ret <- compileFSM (nprog2desc np''')
