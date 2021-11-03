@@ -213,6 +213,34 @@ parseForever = do
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
 
+parseLoopBody :: Pos -> TH.Name -> Parser [Stmt]
+parseLoopBody lvl f = censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
+    many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+
+parseRepeat :: Parser Stmt
+parseRepeat = do
+    (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat") stringToHsExp
+    f <- qlift $ TH.newName "repeat"
+    k <- qlift $ TH.newName "k"
+    ss <- parseLoopBody lvl f
+    return $ SLet VarMut k (VExp e) $
+             SFun (M.singleton f (TH.TupP [], SIf (TH.InfixE (Just $ TH.VarE k) (TH.VarE '(/=)) (Just $ TH.LitE $ TH.IntegerL 0))
+                                                  (SBlock $ ss ++ [SAssign k (VExp $ TH.InfixE (Just $ TH.VarE k) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1))])
+                                                  (SRet $ VExp $ TH.TupE [])))
+                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+
+parseRepeat1 :: Parser Stmt
+parseRepeat1 = do
+    (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat1") stringToHsExp
+    f <- qlift $ TH.newName "repeat1"
+    k <- qlift $ TH.newName "k"
+    ss <- parseLoopBody lvl f
+    return $ SLet VarMut k (VExp $ TH.InfixE (Just e) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1)) $
+             SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [SIf (TH.InfixE (Just $ TH.VarE k) (TH.VarE '(/=)) (Just $ TH.LitE $ TH.IntegerL 0))
+                                                                  (SBlock [SAssign k (VExp $ TH.InfixE (Just $ TH.VarE k) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1)), SRet $ VCall f $ TH.TupE []])
+                                                                  (SRet $ VExp $ TH.TupE [])]))
+                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+
 parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> Stmt -> Stmt -> Stmt)
 parseWhileUntilHelp sc' = (L.symbol sc' "while" *> return SIf) <|> (L.symbol sc' "until" *> return (flip . SIf))
 
@@ -220,8 +248,7 @@ parseWhile :: Parser Stmt
 parseWhile = do
     (lvl, fe) <- parseHsFoldColon (\sc' -> (\a k -> (a,) . k) <$> L.indentLevel <*> parseWhileUntilHelp sc') stringToHsExp
     f <- qlift $ TH.newName "while"
-    ss <- censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
-        many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    ss <- parseLoopBody lvl f
     return $ SFun (M.singleton f (TH.TupP [], fe (SBlock $ ss ++ [SRet $ VCall f $ TH.TupE []]) (SRet $ VExp $ TH.TupE [])))
                   (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
 
@@ -229,8 +256,7 @@ parseDoWhile :: Parser Stmt
 parseDoWhile = do
     lvl <- L.indentLevel <* singleSymbolColon "do"
     f <- qlift $ TH.newName "do"
-    ss <- censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
-        many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+    ss <- parseLoopBody lvl f
     fe <- L.indentGuard scn EQ lvl *> parseHsFold parseWhileUntilHelp stringToHsExp
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [fe (SRet $ VCall f $ TH.TupE []) (SRet $ VExp $ TH.TupE [])]))
                   (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
@@ -265,6 +291,8 @@ parseBasicStmt = parseVar
              <|> parseCase
              <|> parseFun
              <|> parseForever
+             <|> parseRepeat1
+             <|> parseRepeat
              <|> parseBlock
              <|> parseNop
              <|> parseAssign

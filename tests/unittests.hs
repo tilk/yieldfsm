@@ -35,6 +35,7 @@ main = defaultMain $ testGroup "." [
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
     testSlowCounter @CP.System "countSlow" countSlowFSM,
+    testSlowCounter @CP.System "countSlowRepeat" countSlowRepeatFSM,
     testSlowCounter @CP.System "countSlowVarNoRet" countSlowVarNoRetFSM,
     testSlowCounter @CP.System "countSlowVarRet" countSlowVarRetFSM,
     testSlowCounter @CP.System "countSlowLet" countSlowLetFSM,
@@ -181,6 +182,15 @@ ret call f 0
 fun f i:
     yield i
     yield i
+    ret call f (i+1)
+ret call f 0
+|]
+
+[fsm|countSlowRepeatFSM :: (CP.HiddenClockResetEnable dom) 
+                        => CP.Signal dom Integer
+fun f i:
+    repeat1 2 :: Integer:
+        yield i
     ret call f (i+1)
 ret call f 0
 |]
