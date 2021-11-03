@@ -5,6 +5,7 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.Exts as HE
 import qualified Language.Haskell.Meta as HM
 import FSM.Lang
+import FSM.LangQ
 import FSM.FreeVars
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -223,11 +224,11 @@ parseRepeat = do
     f <- qlift $ TH.newName "repeat"
     k <- qlift $ TH.newName "k"
     ss <- parseLoopBody lvl f
-    return $ SLet VarMut k (VExp e) $
-             SFun (M.singleton f (TH.TupP [], SIf (TH.InfixE (Just $ TH.VarE k) (TH.VarE '(/=)) (Just $ TH.LitE $ TH.IntegerL 0))
-                                                  (SBlock $ ss ++ [SAssign k (VExp $ TH.InfixE (Just $ TH.VarE k) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1))])
-                                                  (SRet $ VExp $ TH.TupE [])))
-                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+    qlift $ sLet VarMut k (vExp $ return e) $
+            sFun (M.singleton f (TH.tupP [], sIf [| $(TH.varE k) /= 0 |]
+                                                 (sBlock $ map return ss ++ [sAssign k $ vExp [| $(TH.varE k) - 1 |]])
+                                                 (sRet $ vExp $ TH.tupE [])))
+                 (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
 parseRepeat1 :: Parser Stmt
 parseRepeat1 = do
@@ -235,22 +236,22 @@ parseRepeat1 = do
     f <- qlift $ TH.newName "repeat1"
     k <- qlift $ TH.newName "k"
     ss <- parseLoopBody lvl f
-    return $ SLet VarMut k (VExp $ TH.InfixE (Just e) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1)) $
-             SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [SIf (TH.InfixE (Just $ TH.VarE k) (TH.VarE '(/=)) (Just $ TH.LitE $ TH.IntegerL 0))
-                                                                  (SBlock [SAssign k (VExp $ TH.InfixE (Just $ TH.VarE k) (TH.VarE '(-)) (Just $ TH.LitE $ TH.IntegerL 1)), SRet $ VCall f $ TH.TupE []])
-                                                                  (SRet $ VExp $ TH.TupE [])]))
-                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+    qlift $ sLet VarMut k (vExp [| $(return e) - 1 |]) $
+            sFun (M.singleton f (TH.tupP [], sBlock $ map return ss ++ [sIf [| $(TH.varE k) /= 0 |]
+                                                                            (sBlock [sAssign k $ vExp $ [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
+                                                                            (sRet $ vExp $ TH.tupE [])]))
+                 (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> Stmt -> Stmt -> Stmt)
-parseWhileUntilHelp sc' = (L.symbol sc' "while" *> return SIf) <|> (L.symbol sc' "until" *> return (flip . SIf))
+parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> StmtQ -> StmtQ -> StmtQ)
+parseWhileUntilHelp sc' = (L.symbol sc' "while" *> return (sIf . return)) <|> (L.symbol sc' "until" *> return (flip . sIf . return))
 
 parseWhile :: Parser Stmt
 parseWhile = do
     (lvl, fe) <- parseHsFoldColon (\sc' -> (\a k -> (a,) . k) <$> L.indentLevel <*> parseWhileUntilHelp sc') stringToHsExp
     f <- qlift $ TH.newName "while"
     ss <- parseLoopBody lvl f
-    return $ SFun (M.singleton f (TH.TupP [], fe (SBlock $ ss ++ [SRet $ VCall f $ TH.TupE []]) (SRet $ VExp $ TH.TupE [])))
-                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+    qlift $ sFun (M.singleton f (TH.tupP [], fe (sBlock $ map return ss ++ [sRet $ vCall f $ TH.tupE []]) (sRet $ vExp $ TH.tupE [])))
+                 (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
 parseDoWhile :: Parser Stmt
 parseDoWhile = do
@@ -258,8 +259,8 @@ parseDoWhile = do
     f <- qlift $ TH.newName "do"
     ss <- parseLoopBody lvl f
     fe <- L.indentGuard scn EQ lvl *> parseHsFold parseWhileUntilHelp stringToHsExp
-    return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [fe (SRet $ VCall f $ TH.TupE []) (SRet $ VExp $ TH.TupE [])]))
-                  (SLet VarLet (TH.mkName "_") (VCall f $ TH.TupE []) SNop)
+    qlift $ sFun (M.singleton f (TH.tupP [], sBlock $ map return ss ++ [fe (sRet $ vCall f $ TH.tupE []) (sRet $ vExp $ TH.tupE [])]))
+                 (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
 parseCase :: Parser Stmt
 parseCase = do

@@ -99,6 +99,7 @@ library
     FSM.DescGenADT,
     FSM.FreeVars,
     FSM.Lang,
+    FSM.LangQ,
     FSM.Lang2Desc,
     FSM.LangParser,
     FSM.LangPretty,

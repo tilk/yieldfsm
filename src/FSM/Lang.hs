@@ -42,10 +42,10 @@ data NProg = NProg {
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving (Show, Eq)
 
-sBlock :: [Stmt] -> Stmt
-sBlock [] = SNop
-sBlock [s] = s
-sBlock ss = SBlock ss
+sBlockS :: [Stmt] -> Stmt
+sBlockS [] = SNop
+sBlockS [s] = s
+sBlockS ss = SBlock ss
 
 tupE :: [TH.Exp] -> TH.Exp
 tupE [x] = x

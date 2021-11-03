@@ -78,5 +78,5 @@ makeLocalVarsVStmt (VCall f e) c = do
     vns <- replicateM (length mvs) $ makeName "v"
     s <- c $ TH.VarE rn
     return $ SLet VarLet n (VCall f $ tupE $ e:map TH.VarE mvs) $
-        SCase (TH.VarE n) [(tupP $ map TH.VarP $ rn:vns, sBlock $ zipWith SAssign mvs (map (VExp . TH.VarE) vns) ++ [s])]
+        SCase (TH.VarE n) [(tupP $ map TH.VarP $ rn:vns, sBlockS $ zipWith SAssign mvs (map (VExp . TH.VarE) vns) ++ [s])]
 
