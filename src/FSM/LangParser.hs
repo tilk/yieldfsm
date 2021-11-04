@@ -226,7 +226,7 @@ parseRepeat = do
     ss <- parseLoopBody lvl f
     qlift $ sLet VarMut k (vExp $ return e) $
             sFun (M.singleton f (TH.tupP [], sIf [| $(TH.varE k) /= 0 |]
-                                                 (sBlock $ map return ss ++ [sAssign k $ vExp [| $(TH.varE k) - 1 |]])
+                                                 (sBlock $ map return ss ++ [sAssign k $ vExp [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
                                                  (sRet $ vExp $ TH.tupE [])))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
