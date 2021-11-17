@@ -317,7 +317,7 @@ renameSingle n n' = substSingle n (TH.VarE n')
 
 boundAsVars :: TH.Pat -> S.Set TH.Name
 boundAsVars (TH.LitP _) = mempty
-boundAsVars (TH.VarP n) = mempty
+boundAsVars (TH.VarP _) = mempty
 boundAsVars (TH.TupP ps) = mconcat $ map boundAsVars ps
 boundAsVars (TH.UnboxedTupP ps) = mconcat $ map boundAsVars ps
 boundAsVars (TH.UnboxedSumP p _ _) = boundAsVars p
@@ -332,7 +332,7 @@ boundAsVars (TH.WildP) = mempty
 boundAsVars (TH.RecP _ fps) = mconcat $ map (boundAsVars . snd) fps
 boundAsVars (TH.ListP ps) = mconcat $ map boundAsVars ps
 boundAsVars (TH.SigP p _) = boundAsVars p
-boundAsVars (TH.ViewP e p) = boundAsVars p
+boundAsVars (TH.ViewP _ p) = boundAsVars p
 
 substPat :: M.Map TH.Name TH.Pat -> TH.Pat -> TH.Pat
 substPat _ p@(TH.LitP _) = p
@@ -353,6 +353,7 @@ substPat _ p@(TH.WildP) = p
 substPat s   (TH.RecP n fps) = TH.RecP n ((id *** substPat s) <$> fps)
 substPat s   (TH.ListP ps) = TH.ListP (map (substPat s) ps)
 substPat s   (TH.SigP p t) = TH.SigP (substPat s p) t
+substPat s   (TH.ViewP e p) = TH.ViewP e (substPat s p)
 
 isConstantExpr :: TH.Exp -> Bool
 isConstantExpr (TH.VarE _) = False

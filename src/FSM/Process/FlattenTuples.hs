@@ -26,7 +26,7 @@ canFlattenVStmt ps (VCall n e)
 canFlattenStmt :: NoFun l => PatMap -> Stmt l -> S.Set TH.Name
 canFlattenStmt _  SNop = S.empty
 canFlattenStmt ps (SLet _ _ vs s) = canFlattenVStmt ps vs `S.union` canFlattenStmt ps s
-canFlattenStmt ps (SAssign _ _) = S.empty
+canFlattenStmt _  (SAssign _ _) = S.empty
 canFlattenStmt _  (SYield _) = S.empty
 canFlattenStmt ps (SRet vs) = canFlattenVStmt ps vs
 canFlattenStmt ps (SBlock ss) = S.unions $ map (canFlattenStmt ps) ss
@@ -52,7 +52,7 @@ flattenVStmt ps (VCall n e)
 flattenStmt :: NoFun l => PatMap -> Stmt l -> Stmt l
 flattenStmt _  s@(SNop) = s
 flattenStmt ps   (SLet t n vs s) = SLet t n (flattenVStmt ps vs) (flattenStmt ps s)
-flattenStmt ps s@(SAssign _ _) = s
+flattenStmt _  s@(SAssign _ _) = s
 flattenStmt _  s@(SYield _) = s
 flattenStmt ps   (SRet vs) = SRet $ flattenVStmt ps vs
 flattenStmt ps   (SBlock ss) = SBlock $ map (flattenStmt ps) ss

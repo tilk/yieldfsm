@@ -33,7 +33,6 @@ $(makeLenses ''TCData)
 
 data ContData = ContData {
     contDataConName :: TH.Name,
-    contDataCaller :: TH.Name,
     contDataCalled :: TH.Name,
     contDataResName :: TH.Name,
     contDataVars :: [TH.Name],
@@ -48,7 +47,7 @@ mlookup k = maybe mempty id . M.lookup k
 
 makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt 'LvlLowest -> m (Stmt 'LvlLowest)
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
-    TCData name cfn _ an fvs rfs fn part partInj <- ask
+    TCData name cfn _ an fvs rfs _ part partInj <- ask
     if f `S.member` rfs then do
         let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
         cn <- makeSeqName $ "C" ++ name ++ TH.nameBase f
@@ -56,19 +55,19 @@ makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
         case vst of
             VCall f' e'
                 | f' `S.notMember` rfs -> do
-                    tell [ContData cn fn f n vs e' (ContTgtFun f')]
+                    tell [ContData cn f n vs e' (ContTgtFun f')]
                     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE vs)]))
                 | b == b' -> do
-                    tell [ContData cn fn f n vs e' (ContTgtFunCont f')]
+                    tell [ContData cn f n vs e' (ContTgtFunCont f')]
                     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
                 | Just icn <- M.lookup (b, b') partInj -> do
-                    tell [ContData cn fn f n vs e' (ContTgtFunContInj f' icn)]
+                    tell [ContData cn f n vs e' (ContTgtFunContInj f' icn)]
                     return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
                 | otherwise -> error "should not happen"
                     where
                     b' = partitionLookup f' part
             VExp e' -> do
-                tell [ContData cn fn f n vs e' (ContTgtCont an)]
+                tell [ContData cn f n vs e' (ContTgtCont an)]
                 return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
     else return $ SRet (VCall f e)
 makeTailCallsStmt   (SLet VarLet n (VExp e) s) = locally tcDataFreeVars (S.delete n) $ SLet VarLet n (VExp e) <$> makeTailCallsStmt s
