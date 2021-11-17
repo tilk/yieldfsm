@@ -23,18 +23,18 @@ type LLEnv = M.Map TH.Name (TH.Name, [TH.Name])
 
 $(makeLenses ''LLData)
 
-lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) => Stmt -> m Stmt
-lambdaLiftStmt   (SLet t ln vs s) = do
+lambdaLiftStmt :: (MonadRefresh m, MonadState (FunMap 'LvlLowest) m, MonadReader LLData m) => Stmt 'LvlFull -> m (Stmt 'LvlLowest)
+lambdaLiftStmt (SLet t ln vs s) = do
     ln' <- refreshName ln
     SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameSingle ln ln' s)
-lambdaLiftStmt s@(SAssign n _) = return s
-lambdaLiftStmt s@(SYield _) = return s
-lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
-lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
-lambdaLiftStmt   (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
-lambdaLiftStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLiftStmt s) cs
-lambdaLiftStmt s@(SNop) = return s
-lambdaLiftStmt   (SFun fm s) = do
+lambdaLiftStmt (SAssign n e) = return $ SAssign n e
+lambdaLiftStmt (SYield e) = return $ SYield e
+lambdaLiftStmt (SRet vs) = SRet <$> lambdaLiftVStmt vs
+lambdaLiftStmt (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss
+lambdaLiftStmt (SIf e s1 s2) = SIf e <$> lambdaLiftStmt s1 <*> lambdaLiftStmt s2
+lambdaLiftStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> lambdaLiftStmt s) cs
+lambdaLiftStmt (SNop) = return SNop
+lambdaLiftStmt (SFun fm s) = do
     fvs <- view llDataFreeVars
     e <- forWithKeyM fm $ \n (p, s') -> (, S.elems $ freeVars s' `S.difference` fvs `underPat` freeVarsPat p) <$> refreshName n
     locally llDataEnv (M.union e) $ do
@@ -52,7 +52,7 @@ lambdaLiftVStmt    (VCall n e) = do
     (n', vs) <- views llDataEnv (fromJust . M.lookup n)
     return $ VCall n' $ tupE $ map TH.VarE vs ++ [e]
 
-lambdaLift :: MonadRefresh m => Prog -> m NProg
+lambdaLift :: MonadRefresh m => Prog 'LvlFull -> m (NProg 'LvlLowest)
 lambdaLift prog = do
     (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVars $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
     f <- refreshName $ TH.mkName "init"

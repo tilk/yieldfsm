@@ -23,7 +23,7 @@ canFlattenVStmt ps (VCall n e)
     | Just p <- M.lookup n ps = canFlattenExp n p e
     | otherwise = S.singleton n
 
-canFlattenStmt :: PatMap -> Stmt -> S.Set TH.Name
+canFlattenStmt :: NoFun l => PatMap -> Stmt l -> S.Set TH.Name
 canFlattenStmt _  SNop = S.empty
 canFlattenStmt ps (SLet _ _ vs s) = canFlattenVStmt ps vs `S.union` canFlattenStmt ps s
 canFlattenStmt ps (SAssign _ _) = S.empty
@@ -32,9 +32,8 @@ canFlattenStmt ps (SRet vs) = canFlattenVStmt ps vs
 canFlattenStmt ps (SBlock ss) = S.unions $ map (canFlattenStmt ps) ss
 canFlattenStmt ps (SIf _ st sf) = canFlattenStmt ps st `S.union` canFlattenStmt ps sf
 canFlattenStmt ps (SCase _ cs) = S.unions $ map (canFlattenStmt ps . snd) cs
-canFlattenStmt _  (SFun _ _) = error "Not in lambda-lifted form"
 
-canFlattenFunMap :: PatMap -> FunMap -> S.Set TH.Name
+canFlattenFunMap :: NoFun l => PatMap -> FunMap l -> S.Set TH.Name
 canFlattenFunMap ps = S.unions . map (canFlattenStmt ps . snd . snd) . M.toList
 
 flattenExp :: TH.Pat -> TH.Exp -> TH.Exp
@@ -50,7 +49,7 @@ flattenVStmt ps (VCall n e)
     | Just p <- M.lookup n ps = VCall n (flattenExp p e)
     | otherwise = VCall n e
 
-flattenStmt :: PatMap -> Stmt -> Stmt
+flattenStmt :: NoFun l => PatMap -> Stmt l -> Stmt l
 flattenStmt _  s@(SNop) = s
 flattenStmt ps   (SLet t n vs s) = SLet t n (flattenVStmt ps vs) (flattenStmt ps s)
 flattenStmt ps s@(SAssign _ _) = s
@@ -59,7 +58,6 @@ flattenStmt ps   (SRet vs) = SRet $ flattenVStmt ps vs
 flattenStmt ps   (SBlock ss) = SBlock $ map (flattenStmt ps) ss
 flattenStmt ps   (SIf e st sf) = SIf e (flattenStmt ps st) (flattenStmt ps sf)
 flattenStmt ps   (SCase e cs) = SCase e (map (id *** flattenStmt ps) cs)
-flattenStmt _    (SFun _ _) = error "Not in lambda-lifted form"
 
 flattenPat :: TH.Pat -> TH.Pat
 flattenPat p@(TH.TupP _) = tupP $ fl p
@@ -68,18 +66,18 @@ flattenPat p@(TH.TupP _) = tupP $ fl p
     fl p' = [p']
 flattenPat _ = error "Non-tuple pattern for flattening"
 
-flattenFun :: PatMap -> TH.Name -> (TH.Pat, Stmt) -> (TH.Pat, Stmt)
+flattenFun :: NoFun l => PatMap -> TH.Name -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
 flattenFun ps n (p, s) | n `M.member` ps = (flattenPat p, flattenStmt ps s)
                        | otherwise = (p, flattenStmt ps s)
 
-flattenFunMap :: PatMap -> FunMap -> FunMap
+flattenFunMap :: NoFun l => PatMap -> FunMap l -> FunMap l
 flattenFunMap ps fs = M.mapWithKey (flattenFun ps) fs
 
 isTupP :: TH.Pat -> Bool
 isTupP (TH.TupP _) = True
 isTupP _ = False
 
-flattenTuples :: NProg -> NProg
+flattenTuples :: NoFun l => NProg l -> NProg l
 flattenTuples prog = prog {
         nProgFuns = flattenFunMap flatPat $ nProgFuns prog,
         nProgInitParam = if nProgInit prog `M.member` flatPat then initPar else nProgInitParam prog

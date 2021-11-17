@@ -96,7 +96,7 @@ instance FreeConstructors VStmt where
     freeConstructorsPat (VExp e) = freeConstructorsPat e
     freeConstructorsPat (VCall _ e) = freeConstructorsPat e
 
-instance FreeConstructors Stmt where
+instance FreeConstructors (Stmt l) where
     freeConstructorsPat (SLet _ _ vs s) = freeConstructorsPat vs <> freeConstructorsPat s
     freeConstructorsPat (SAssign _ vs) = freeConstructorsPat vs
     freeConstructorsPat (SYield e) = freeConstructorsPat e
@@ -122,15 +122,15 @@ freeConstructors = patFree . freeConstructorsPat
 patConstructors :: FreeConstructors a => a -> S.Set TH.Name
 patConstructors = patBound . freeConstructorsPat
 
-freeConstructorsPatFunMap :: FunMap -> PatFV S.Set
+freeConstructorsPatFunMap :: FunMap l -> PatFV S.Set
 freeConstructorsPatFunMap = freeConstructorsPat . map snd . M.toList
 
-freeConstructorsFunMap :: FunMap -> S.Set TH.Name
+freeConstructorsFunMap :: FunMap l -> S.Set TH.Name
 freeConstructorsFunMap = patFree . freeConstructorsPatFunMap
 
 -- todo: removing constructors from exps
 
-removeConstructorsStmt :: S.Set TH.Name -> Stmt -> Stmt
+removeConstructorsStmt :: S.Set TH.Name -> Stmt l -> Stmt l
 removeConstructorsStmt con   (SLet t n vs s) = SLet t n vs (removeConstructorsStmt con s)
 removeConstructorsStmt _   s@(SAssign _ _) = s
 removeConstructorsStmt _   s@(SYield _) = s
@@ -141,10 +141,10 @@ removeConstructorsStmt con   (SIf e st sf) = SIf e (removeConstructorsStmt con s
 removeConstructorsStmt con   (SCase e cs) = SCase e $ map (id *** removeConstructorsStmt con) . filter (S.null . (`S.difference` con) . patConstructors . fst) $ cs
 removeConstructorsStmt _   s@(SNop) = s
 
-removeConstructorsFunMap :: S.Set TH.Name -> FunMap -> FunMap
+removeConstructorsFunMap :: S.Set TH.Name -> FunMap l -> FunMap l
 removeConstructorsFunMap con = M.map (id *** removeConstructorsStmt con) . M.filter (S.null . (`S.difference` con) . patConstructors . fst)
 
-cleanUnusedConstructors :: NProg -> NProg
+cleanUnusedConstructors :: NProg l -> NProg l
 cleanUnusedConstructors prog = prog { 
         nProgFuns = removeConstructorsFunMap con $ nProgFuns prog,
         nProgConts = M.map (M.filterWithKey (\n _ -> n `S.member` con)) $ nProgConts prog

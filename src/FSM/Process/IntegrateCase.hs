@@ -21,7 +21,7 @@ unionsC = M.unionsWith unionCFunc
 cantFromSetC :: S.Set TH.Name -> M.Map TH.Name (Maybe TH.Pat)
 cantFromSetC = M.fromSet (const Nothing)
 
-canIntegrateCaseStmt :: S.Set TH.Name -> Stmt -> M.Map TH.Name (Maybe TH.Pat)
+canIntegrateCaseStmt :: NoFun l => S.Set TH.Name -> Stmt l -> M.Map TH.Name (Maybe TH.Pat)
 canIntegrateCaseStmt ns (SLet _ _ vs s) = canIntegrateCaseStmt ns s `unionC` cantFromSetC (freeVars vs `S.intersection` ns)
 canIntegrateCaseStmt ns (SAssign _ vs) = cantFromSetC (freeVars vs `S.intersection` ns)
 canIntegrateCaseStmt ns (SYield e) = cantFromSetC (freeVars e `S.intersection` ns)
@@ -33,10 +33,9 @@ canIntegrateCaseStmt ns (SCase e ps)
     | otherwise = unionsC (map f ps) `unionC` cantFromSetC (freeVars e `S.intersection` ns)
         where
         f (p, s) = canIntegrateCaseStmt ns s `unionC` cantFromSetC (freeVars p `S.intersection` ns)
-canIntegrateCaseStmt _  (SFun _ _) = error "Not in lambda-lifted form"
 canIntegrateCaseStmt _   SNop = M.empty
 
-integrateCaseStmt :: S.Set TH.Name -> Stmt -> Stmt
+integrateCaseStmt :: NoFun l => S.Set TH.Name -> Stmt l -> Stmt l
 integrateCaseStmt ns   (SLet t n vs s) = SLet t n vs $ integrateCaseStmt (S.delete n ns) s
 integrateCaseStmt _  s@(SAssign _ _) = s
 integrateCaseStmt _  s@(SYield _) = s
@@ -46,16 +45,15 @@ integrateCaseStmt ns   (SIf e st sf) = SIf e (integrateCaseStmt ns st) (integrat
 integrateCaseStmt ns   (SCase e ps)
     | TH.VarE n <- e, [(_, s)] <- ps, n `S.member` ns = integrateCaseStmt ns s
     | otherwise = SCase e $ map (id *** integrateCaseStmt ns) ps
-integrateCaseStmt _    (SFun _ _) = error "Not in lambda-lifted form"
 integrateCaseStmt _  s@(SNop) = s
 
-integrateCaseFunMap :: FunMap -> FunMap
+integrateCaseFunMap :: NoFun l => FunMap l -> FunMap l
 integrateCaseFunMap fs = M.map f fs
     where
     f (p, s) = (substPat cm p, integrateCaseStmt (M.keysSet cm) s)
         where
         cm = M.map fromJust $ M.filter isJust $ canIntegrateCaseStmt (boundVars p `S.difference` boundAsVars p) s
 
-integrateCase :: NProg -> NProg
+integrateCase :: NoFun l => NProg l -> NProg l
 integrateCase prog = prog { nProgFuns = integrateCaseFunMap $ nProgFuns prog }
 

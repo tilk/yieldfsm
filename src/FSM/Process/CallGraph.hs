@@ -15,16 +15,16 @@ data CGEdge = CGEdge {
 
 type CG = [CGEdge]
 
-callGraph :: Stmt -> CG
+callGraph :: Stmt l -> CG
 callGraph s = callGraphStmt (TH.mkName "") s
 
-callGraphFlat :: FunMap -> CG
+callGraphFlat :: FunMap l -> CG
 callGraphFlat fs = callGraphFunMap (TH.mkName "") fs SNop
 
-callGraphFunMap :: TH.Name -> FunMap -> Stmt -> CG
+callGraphFunMap :: TH.Name -> FunMap l -> Stmt l -> CG
 callGraphFunMap n fs s = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s') `mplus` callGraphStmt n s
 
-callGraphStmt :: TH.Name -> Stmt -> CG
+callGraphStmt :: TH.Name -> Stmt l -> CG
 callGraphStmt _ SNop = mzero
 callGraphStmt _ (SYield _) = mzero
 callGraphStmt n (SLet _ _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
@@ -39,9 +39,9 @@ callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
 callGraphVStmt _ _ (VExp _) = mzero
 callGraphVStmt n t (VCall n' e) = return $ CGEdge n n' e t
 
-callGraphProg :: Prog -> CG
+callGraphProg :: Prog l -> CG
 callGraphProg prog = callGraph $ progBody prog
 
-callGraphNProg :: NProg -> CG
+callGraphNProg :: NProg l -> CG
 callGraphNProg prog = CGEdge (TH.mkName "INIT") (nProgInit prog) (nProgInitParam prog) True : callGraphFlat (nProgFuns prog)
 

@@ -7,9 +7,9 @@ import Prelude
 
 type VStmtQ = TH.Q VStmt
 
-type StmtQ = TH.Q Stmt
+type StmtQ l = TH.Q (Stmt l)
 
-type FunMapQ = M.Map TH.Name (TH.PatQ, StmtQ)
+type FunMapQ l = M.Map TH.Name (TH.PatQ, StmtQ l)
 
 psequence :: Monad m => (m a, m b) -> m (a, b)
 psequence (a, b) = (,) <$> a <*> b
@@ -20,31 +20,31 @@ vExp e = VExp <$> e
 vCall :: TH.Name -> TH.ExpQ -> VStmtQ
 vCall n e = VCall n <$> e
 
-sLet :: VarKind -> TH.Name -> VStmtQ -> StmtQ -> StmtQ
+sLet :: VarKind -> TH.Name -> VStmtQ -> StmtQ l -> StmtQ l
 sLet k n vs s = SLet k n <$> vs <*> s
 
-sAssign :: TH.Name -> TH.ExpQ -> StmtQ
+sAssign :: TH.Name -> TH.ExpQ -> StmtQ l
 sAssign n e = SAssign n <$> e
 
-sYield :: TH.ExpQ -> StmtQ
+sYield :: TH.ExpQ -> StmtQ l
 sYield e = SYield <$> e
 
-sRet :: VStmtQ -> StmtQ
+sRet :: VStmtQ -> StmtQ l
 sRet vs = SRet <$> vs
 
-sFun :: FunMapQ -> StmtQ -> StmtQ
+sFun :: WithFun l => FunMapQ l -> StmtQ l -> StmtQ l
 sFun fs s = SFun <$> sequence (M.map psequence fs) <*> s
 
-sBlock :: [StmtQ] -> StmtQ
+sBlock :: [StmtQ l] -> StmtQ l
 sBlock ss = SBlock <$> sequence ss
 
-sIf :: TH.ExpQ -> StmtQ -> StmtQ -> StmtQ
+sIf :: TH.ExpQ -> StmtQ l -> StmtQ l -> StmtQ l
 sIf e st sf = SIf <$> e <*> st <*> sf
 
-sCase :: TH.ExpQ -> [(TH.PatQ, StmtQ)] -> StmtQ
+sCase :: TH.ExpQ -> [(TH.PatQ, StmtQ l)] -> StmtQ l
 sCase e cs = SCase <$> e <*> sequence (map psequence cs)
 
-sNop :: StmtQ
+sNop :: StmtQ l
 sNop = return SNop
 
 

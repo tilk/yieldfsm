@@ -20,12 +20,12 @@ data DTData = DTData {
 
 $(makeLenses ''DTData)
 
-deTailCall :: MonadRefresh m => Prog -> m Prog
+deTailCall :: MonadRefresh m => Prog l -> m (Prog l)
 deTailCall prog = do
     s' <- flip runReaderT (DTData (TH.mkName "") (returningFuns $ progBody prog) (tailCallSCC prog)) $ deTailCallStmt $ progBody prog
     return $ prog { progBody = s' }
 
-deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt -> m Stmt
+deTailCallStmt :: (MonadReader DTData m, MonadRefresh m) => Stmt l -> m (Stmt l)
 deTailCallStmt s@(SNop) = return s
 deTailCallStmt s@(SYield _) = return s
 deTailCallStmt   (SLet t n e s) = SLet t n e <$> deTailCallStmt s

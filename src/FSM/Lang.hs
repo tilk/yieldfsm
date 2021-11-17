@@ -2,9 +2,20 @@ module FSM.Lang where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
+import Data.Kind(Type)
 import Prelude
 
-type FunMap = M.Map TH.Name (TH.Pat, Stmt)
+data Lvl = LvlFull
+         | LvlLowest
+
+type family HasFun (l :: Lvl) :: Bool
+type WithFun l = HasFun l ~ 'True
+type NoFun l = HasFun l ~ 'False
+
+type instance HasFun 'LvlFull = 'True
+type instance HasFun 'LvlLowest = 'False
+
+type FunMap l = M.Map TH.Name (TH.Pat, Stmt l)
 
 data VStmt = VExp TH.Exp
            | VCall TH.Name TH.Exp
@@ -12,37 +23,40 @@ data VStmt = VExp TH.Exp
 
 data VarKind = VarLet | VarMut deriving (Show, Eq)
 
-data Stmt = SLet VarKind TH.Name VStmt Stmt
-          | SAssign TH.Name TH.Exp
-          | SYield TH.Exp
-          | SRet VStmt
-          | SFun FunMap Stmt
-          | SBlock [Stmt]
-          | SIf TH.Exp Stmt Stmt
-          | SCase TH.Exp [(TH.Pat, Stmt)]
-          | SNop
-    deriving (Show, Eq)
+data Stmt :: Lvl -> Type where
+    SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
+    SAssign :: TH.Name -> TH.Exp -> Stmt l
+    SYield  :: TH.Exp -> Stmt l
+    SRet    :: VStmt -> Stmt l
+    SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
+    SBlock  :: [Stmt l] -> Stmt l
+    SIf     :: TH.Exp -> Stmt l -> Stmt l -> Stmt l
+    SCase   :: TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
+    SNop    :: Stmt l
 
-data Prog = Prog {
+deriving instance Show (Stmt l)
+deriving instance Eq (Stmt l)
+
+data Prog l = Prog {
     progName :: TH.Name,
     progType :: TH.Type,
     progParams :: [TH.Pat],
     progInputs :: Maybe TH.Pat,
-    progBody :: Stmt
+    progBody :: Stmt l
 } deriving (Show, Eq)
 
-data NProg = NProg {
+data NProg l = NProg {
     nProgName :: TH.Name,
     nProgType :: TH.Type,
     nProgParams :: [TH.Pat],
     nProgInputs :: Maybe TH.Pat,
-    nProgFuns :: FunMap,
+    nProgFuns :: FunMap l,
     nProgInit :: TH.Name,
     nProgInitParam :: TH.Exp,
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving (Show, Eq)
 
-sBlockS :: [Stmt] -> Stmt
+sBlockS :: [Stmt l] -> Stmt l
 sBlockS [] = SNop
 sBlockS [s] = s
 sBlockS ss = SBlock ss
@@ -55,7 +69,7 @@ tupP :: [TH.Pat] -> TH.Pat
 tupP [x] = x
 tupP xs = TH.TupP xs
 
-emittingStmt :: Stmt -> Bool
+emittingStmt :: Stmt l -> Bool
 emittingStmt (SBlock [SYield _, _]) = True
 emittingStmt SNop = False
 emittingStmt (SRet _) = False

@@ -13,7 +13,7 @@ refreshFunctionsVStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> VStmt -> m V
 refreshFunctionsVStmt _ (VExp e) = return $ VExp e
 refreshFunctionsVStmt m (VCall f e) = return $ VCall (fromJust $ M.lookup f m) e
 
-refreshFunctionsStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> Stmt -> m Stmt
+refreshFunctionsStmt :: MonadRefresh m => M.Map TH.Name TH.Name -> Stmt l -> m (Stmt l)
 refreshFunctionsStmt _ SNop = return SNop
 refreshFunctionsStmt _ (SYield e) = return $ SYield e
 refreshFunctionsStmt m (SRet vs) = SRet <$> refreshFunctionsVStmt m vs
@@ -26,7 +26,7 @@ refreshFunctionsStmt m (SFun fs s) = do
     m' <- (`M.union` m) <$> (forWithKeyM fs $ \f _ -> refreshName f)
     SFun <$> (M.fromList <$> forM (M.toList fs) (\(f, (p, s')) ->  (fromJust $ M.lookup f m', ) . (p,) <$> refreshFunctionsStmt m' s')) <*> refreshFunctionsStmt m' s
 
-refreshFunctions :: MonadRefresh m => Prog -> m Prog
+refreshFunctions :: MonadRefresh m => Prog l -> m (Prog l)
 refreshFunctions prog = do
     s <- refreshFunctionsStmt M.empty $ progBody prog
     return $ prog { progBody = s }

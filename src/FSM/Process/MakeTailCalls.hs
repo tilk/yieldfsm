@@ -46,7 +46,7 @@ data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name | ContTgtFunCont TH.Name
 mlookup :: (Ord k, Monoid a) => k -> M.Map k a -> a
 mlookup k = maybe mempty id . M.lookup k
 
-makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt -> m Stmt
+makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt 'LvlLowest -> m (Stmt 'LvlLowest)
 makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
     TCData name cfn _ an fvs rfs fn part partInj <- ask
     if f `S.member` rfs then do
@@ -92,7 +92,7 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
 makeTailCallsStmt   (SBlock [SYield e,s]) = (\s' -> SBlock [SYield e, s']) <$> makeTailCallsStmt s
 makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
 
-makeTailCalls :: MonadRefresh m => NProg -> m NProg
+makeTailCalls :: MonadRefresh m => NProg 'LvlLowest -> m (NProg 'LvlLowest)
 makeTailCalls prog = evalUniqueT $ do
     partInj <- forM (M.fromSet (const ()) edges) $ \() -> makeSeqName $ "C" ++ name
     partInfo <- fmap (M.map fromJust . M.filter isJust) $ forM (partitionSets part) $ \ns -> do

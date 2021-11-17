@@ -17,7 +17,7 @@ data CBData = CBData {
     cbDataName :: TH.Name
 }
 
-makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState FunMap m) => Stmt -> m Stmt
+makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState (FunMap l) m) => Stmt l -> m (Stmt l)
 makeCont s = do
     CBData fv _ n <- ask
     let vs = S.toList $ freeVars s `S.difference` fv
@@ -25,7 +25,7 @@ makeCont s = do
     modify $ M.insert n' (tupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
-cutBlocksStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader CBData m) => Stmt -> Stmt -> m Stmt
+cutBlocksStmt :: (MonadRefresh m, MonadState (FunMap l) m, MonadReader CBData m) => Stmt l -> Stmt l -> m (Stmt l)
 cutBlocksStmt SNop         s' = return s'
 cutBlocksStmt (SRet vs)    _  = return $ SRet vs
 cutBlocksStmt (SBlock [])  s' = return s'
@@ -62,9 +62,9 @@ cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''
 
-cutBlocks :: MonadRefresh m => NProg -> m NProg
+cutBlocks :: MonadRefresh m => NProg l -> m (NProg l)
 cutBlocks prog = do
-    let fvs = freeVars $ SFun (nProgFuns prog) SNop
+    let fvs = freeVarsFunMap $ nProgFuns prog
     let ivs = boundVars $ nProgInputs prog
     fs' <- flip execStateT M.empty $ forM_ (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
         s' <- flip runReaderT (CBData fvs ivs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))

@@ -149,50 +149,50 @@ singleSymbolColon s = symbol sc s *> single ':' *> newlineOrEof
 parseName :: Parser () -> Parser TH.Name
 parseName sc' = TH.mkName <$> ident sc'
 
-vStmtToExp :: (TH.Exp -> Stmt) -> VStmt -> Parser Stmt
+vStmtToExp :: (TH.Exp -> Stmt 'LvlFull) -> VStmt -> Parser (Stmt 'LvlFull)
 vStmtToExp s (VExp e) = return $ s e
-vStmtTpExp s vs = do
+vStmtToExp s vs = do
     n <- qlift $ TH.newName "e"
-    return $ SLet VarLet n vs (s n)
+    return $ SLet VarLet n vs (s $ TH.VarE n)
 
-parseVar :: Parser Stmt
+parseVar :: Parser (Stmt 'LvlFull)
 parseVar = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "var" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarMut) $ SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseAssign :: Parser Stmt
+parseAssign :: Parser (Stmt 'LvlFull)
 parseAssign = do
     (i, vs) <- parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
     vm <- view prDataVars
     unless (M.lookup i vm == Just VarMut) $ fail $ "Invalid assignment target " ++ TH.nameBase i
     vStmtToExp (SAssign i) vs
 
-parseLet :: Parser Stmt
+parseLet :: Parser (Stmt 'LvlFull)
 parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseEmit :: Parser Stmt
+parseEmit :: Parser (Stmt 'LvlFull)
 parseEmit = do
     vs <- parseVStmt (\sc' -> L.symbol sc' "yield" >> return id)
     vStmtToExp SYield vs
 
-parseRet :: Parser Stmt
+parseRet :: Parser (Stmt 'LvlFull)
 parseRet = mkRet =<< parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
 
-mkRet :: VStmt -> Parser Stmt
+mkRet :: VStmt -> Parser (Stmt 'LvlFull)
 mkRet vs = do
     l <- view prDataLoop
     scribe pwDataRet True
     if l == Nothing then return $ SRet vs else error "Return in loops currently unsupported"
 
-parseIf :: Parser Stmt
+parseIf :: Parser (Stmt 'LvlFull)
 parseIf = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "if") stringToHsExp
     SIf e <$> (L.indentGuard scn GT lvl *> parseStmt)
           <*> ((try (L.indentGuard scn EQ lvl *> singleSymbolColon "else") *> L.indentGuard scn GT lvl *> parseStmt) <|> return SNop)
 
-parseFun :: Parser Stmt
+parseFun :: Parser (Stmt 'LvlFull)
 parseFun = do
     (lvl, n, p) <- parseHsFoldColon (\sc' -> (,,) <$> L.indentLevel <* L.symbol sc' "fun" <*> parseName sc') stringToHsPat
     first <- (L.indentGuard scn GT lvl *> parseFunBody n p)
@@ -201,17 +201,17 @@ parseFun = do
         L.indentGuard scn GT lvl *> parseFunBody n' p'
     SFun (M.fromList $ first:rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt))
+parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt 'LvlFull))
 parseFunBody n p = do
     (s, r) <- locally prDataVars (M.union $ boundVarsEnv p) $ listening pwDataRet $ parseStmt
     return (n, (p, if r then s else SBlock [s, SRet $ VExp $ TH.TupE []]))
 
-parseBlock :: Parser Stmt
+parseBlock :: Parser (Stmt 'LvlFull)
 parseBlock = do
     lvl <- L.indentLevel <* singleSymbolColon "begin"
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
-parseForever :: Parser Stmt
+parseForever :: Parser (Stmt 'LvlFull)
 parseForever = do
     lvl <- L.indentLevel <* singleSymbolColon "forever"
     f <- qlift $ TH.newName "forever"
@@ -220,11 +220,11 @@ parseForever = do
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock $ ss ++ [scall])) scall
 
-parseLoopBody :: Pos -> TH.Name -> Parser [Stmt]
+parseLoopBody :: Pos -> TH.Name -> Parser [Stmt 'LvlFull]
 parseLoopBody lvl f = censoring pwDataRet (const False) $ locally prDataLoop (const $ Just f) $
     many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
 
-parseRepeat :: Parser Stmt
+parseRepeat :: Parser (Stmt 'LvlFull)
 parseRepeat = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat") stringToHsExp
     f <- qlift $ TH.newName "repeat"
@@ -236,7 +236,7 @@ parseRepeat = do
                                                  (sRet $ vExp $ TH.tupE [])))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-parseRepeat1 :: Parser Stmt
+parseRepeat1 :: Parser (Stmt 'LvlFull)
 parseRepeat1 = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat1") stringToHsExp
     f <- qlift $ TH.newName "repeat1"
@@ -248,10 +248,10 @@ parseRepeat1 = do
                                                                             (sRet $ vExp $ TH.tupE [])]))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> StmtQ -> StmtQ -> StmtQ)
+parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> StmtQ 'LvlFull -> StmtQ 'LvlFull -> StmtQ 'LvlFull)
 parseWhileUntilHelp sc' = (L.symbol sc' "while" *> return (sIf . return)) <|> (L.symbol sc' "until" *> return (flip . sIf . return))
 
-parseWhile :: Parser Stmt
+parseWhile :: Parser (Stmt 'LvlFull)
 parseWhile = do
     (lvl, fe) <- parseHsFoldColon (\sc' -> (\a k -> (a,) . k) <$> L.indentLevel <*> parseWhileUntilHelp sc') stringToHsExp
     f <- qlift $ TH.newName "while"
@@ -259,7 +259,7 @@ parseWhile = do
     qlift $ sFun (M.singleton f (TH.tupP [], fe (sBlock $ map return ss ++ [sRet $ vCall f $ TH.tupE []]) (sRet $ vExp $ TH.tupE [])))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-parseDoWhile :: Parser Stmt
+parseDoWhile :: Parser (Stmt 'LvlFull)
 parseDoWhile = do
     lvl <- L.indentLevel <* singleSymbolColon "do"
     f <- qlift $ TH.newName "do"
@@ -268,17 +268,17 @@ parseDoWhile = do
     qlift $ sFun (M.singleton f (TH.tupP [], sBlock $ map return ss ++ [fe (sRet $ vCall f $ TH.tupE []) (sRet $ vExp $ TH.tupE [])]))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-parseCase :: Parser Stmt
+parseCase :: Parser (Stmt 'LvlFull)
 parseCase = do
     (lvl, e) <- parseHsFold (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "case") stringToHsExp
     cs <- some $ (,) <$> parseHsFoldColon (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id) stringToHsPat
                      <*> (L.indentGuard scn GT lvl *> parseStmt)
     return $ SCase e cs
 
-parseNop :: Parser Stmt
+parseNop :: Parser (Stmt 'LvlFull)
 parseNop = singleSymbol "nop" *> return SNop
 
-parseContinue :: Parser Stmt
+parseContinue :: Parser (Stmt 'LvlFull)
 parseContinue = do
     singleSymbol "continue"
     l <- view prDataLoop
@@ -286,10 +286,10 @@ parseContinue = do
         Nothing -> fail "Continue outside a loop"
         Just i -> return $ SRet $ VCall i (TH.TupE [])
 
-parseCall :: Parser Stmt
+parseCall :: Parser (Stmt 'LvlFull)
 parseCall = (\vs -> SLet VarLet (TH.mkName "_") vs SNop) <$> parseHsFold (\sc' -> VCall <$> (L.symbol sc' "call" *> parseName sc')) stringToHsExp
 
-parseBasicStmt :: Parser Stmt
+parseBasicStmt :: Parser (Stmt 'LvlFull)
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
@@ -308,12 +308,12 @@ parseBasicStmt = parseVar
              <|> parseWhile
              <|> parseDoWhile
 
-mkStmt :: [Stmt] -> Stmt
+mkStmt :: [Stmt 'LvlFull] -> Stmt 'LvlFull
 mkStmt [] = SNop
 mkStmt [s] = s
 mkStmt ss = SBlock ss
 
-parseStmt :: Parser Stmt
+parseStmt :: Parser (Stmt 'LvlFull)
 parseStmt = do
     lvl <- L.indentLevel
     mkStmt <$> (some $ try (L.indentGuard scn EQ lvl >> notFollowedBy eof) *> parseBasicStmt)
@@ -321,7 +321,7 @@ parseStmt = do
 parseVStmt :: (Parser () -> Parser (VStmt -> a)) -> Parser a
 parseVStmt pfx = parseHsFold (\sc' -> (.) <$> pfx sc' <*> (VCall <$> (L.symbol sc' "call" *> parseName sc') <|> return VExp)) stringToHsExp
 
-parseProg :: Parser Prog
+parseProg :: Parser (Prog 'LvlFull)
 parseProg = do
     (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
     ps <- many (try $ L.nonIndented scn $ parseHsFoldSymbol "param" stringToHsPat)
@@ -330,6 +330,6 @@ parseProg = do
     scn *> eof
     return $ Prog i t ps is s
 
-runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) Prog)
+runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog 'LvlFull))
 runParseProg s = fmap fst <$> (runParserT (runWriterT (runReaderT parseProg prData)) "" s)
 

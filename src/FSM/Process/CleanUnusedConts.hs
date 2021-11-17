@@ -108,7 +108,7 @@ instance CleanConts VStmt where
     cleanConts ns (VExp e) = VExp $ cleanConts ns e
     cleanConts ns (VCall n e) = VCall n $ cleanConts ns e
 
-instance CleanConts Stmt where
+instance CleanConts (Stmt l) where
     cleanConts ns (SLet t n vs s) = SLet t n (cleanConts ns vs) (cleanConts ns s)
     cleanConts ns (SAssign n vs) = SAssign n (cleanConts ns vs)
     cleanConts ns (SYield e) = SYield (cleanConts ns e)
@@ -128,10 +128,10 @@ instance CleanConts a => CleanConts [a] where
 instance (CleanConts a, CleanConts b) => CleanConts (a, b) where
     cleanConts ns = cleanConts ns *** cleanConts ns
 
-cleanContsFunMap :: S.Set TH.Name -> FunMap -> FunMap
+cleanContsFunMap :: S.Set TH.Name -> FunMap l -> FunMap l
 cleanContsFunMap ns = M.map (cleanConts ns *** cleanConts ns)
 
-cleanUnusedConts :: NProg -> NProg
+cleanUnusedConts :: NProg l -> NProg l
 cleanUnusedConts prog = prog {
         nProgFuns = cleanContsFunMap ns $ nProgFuns prog,
         nProgInitParam = cleanConts ns $ nProgInitParam prog,
