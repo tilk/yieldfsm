@@ -32,7 +32,7 @@ addVar n = SLet VarMut n (VExp $ TH.VarE 'CP.undefined)
 
 previousInputs :: Prog -> Prog
 previousInputs prog 
-    | length pvars > 0 = prog { progBody = flip (foldr addVar) (map fst pvars) $ updateYieldsStmt (map (\(n, n') -> SAssign n (VExp $ TH.VarE n')) pvars) $ progBody prog }
+    | length pvars > 0 = prog { progBody = flip (foldr addVar) (map fst pvars) $ updateYieldsStmt (map (\(n, n') -> SAssign n (TH.VarE n')) pvars) $ progBody prog }
     | otherwise = prog
     where
     ivars = S.map TH.nameBase $ boundVars $ progInputs prog

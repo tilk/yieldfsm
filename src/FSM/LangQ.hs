@@ -23,8 +23,8 @@ vCall n e = VCall n <$> e
 sLet :: VarKind -> TH.Name -> VStmtQ -> StmtQ -> StmtQ
 sLet k n vs s = SLet k n <$> vs <*> s
 
-sAssign :: TH.Name -> VStmtQ -> StmtQ
-sAssign n vs = SAssign n <$> vs
+sAssign :: TH.Name -> TH.ExpQ -> StmtQ
+sAssign n e = SAssign n <$> e
 
 sYield :: TH.ExpQ -> StmtQ
 sYield e = SYield <$> e

@@ -16,7 +16,7 @@ prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> TH.ppr n <+> prettyK
     where
     kw VarLet = "let"
     kw VarMut = "var"
-prettyStmt (SAssign n vs) = TH.ppr n <+> prettyKeyword "=" <+> prettyVStmt vs
+prettyStmt (SAssign n e) = TH.ppr n <+> prettyKeyword "=" <+> TH.ppr e
 prettyStmt (SYield e) = prettyKeyword "yield" <+> TH.ppr e
 prettyStmt (SRet vs) = prettyKeyword "ret" <+> prettyVStmt vs
 prettyStmt (SFun fs s) = vcat $ map f (M.toList fs) ++ [prettyStmt s]

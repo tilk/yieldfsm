@@ -18,7 +18,7 @@ canCleanVStmt m (VCall n e) = canCleanExp m n e
 canCleanStmt :: UFMap -> Stmt -> S.Set TH.Name
 canCleanStmt _ SNop = S.empty
 canCleanStmt m (SLet _ _ vs s) = canCleanVStmt m vs `S.union` canCleanStmt m s
-canCleanStmt m (SAssign _ vs) = canCleanVStmt m vs
+canCleanStmt _ (SAssign _ _) = S.empty
 canCleanStmt _ (SYield _) = S.empty
 canCleanStmt m (SRet vs) = canCleanVStmt m vs
 canCleanStmt m (SBlock ss) = S.unions $ map (canCleanStmt m) ss
@@ -70,7 +70,7 @@ doCleanVStmt m (VCall n e) = VCall n (doCleanExp m n e)
 doCleanStmt :: UFMap -> Stmt -> Stmt
 doCleanStmt _ s@(SNop) = s
 doCleanStmt m   (SLet n t vs s) = SLet n t (doCleanVStmt m vs) (doCleanStmt m s)
-doCleanStmt m   (SAssign n vs) = SAssign n (doCleanVStmt m vs)
+doCleanStmt _ s@(SAssign _ _) = s
 doCleanStmt _ s@(SYield _) = s
 doCleanStmt m   (SRet vs) = SRet (doCleanVStmt m vs)
 doCleanStmt m   (SBlock ss) = SBlock $ map (doCleanStmt m) ss

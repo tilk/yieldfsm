@@ -27,7 +27,7 @@ lambdaLiftStmt :: (MonadRefresh m, MonadState FunMap m, MonadReader LLData m) =>
 lambdaLiftStmt   (SLet t ln vs s) = do
     ln' <- refreshName ln
     SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameSingle ln ln' s)
-lambdaLiftStmt   (SAssign n vs) = SAssign n <$> lambdaLiftVStmt vs
+lambdaLiftStmt s@(SAssign n _) = return s
 lambdaLiftStmt s@(SYield _) = return s
 lambdaLiftStmt   (SRet vs) = SRet <$> lambdaLiftVStmt vs
 lambdaLiftStmt   (SBlock ss) = SBlock <$> mapM lambdaLiftStmt ss

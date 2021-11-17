@@ -55,9 +55,9 @@ cutBlocksStmt (SLet _ ln vs@(VCall _ _) s) s' = do
     s'' <- cutBlocksStmt (renameSingle ln ln' s) s'
     s''' <- makeCont s''
     return $ SLet VarLet ln' vs s'''
-cutBlocksStmt (SAssign ln vs) s' = do
+cutBlocksStmt (SAssign ln e) s' = do
     ln' <- refreshName ln
-    return $ SLet VarLet ln' vs $ renameSingle ln ln' s'
+    return $ SLet VarLet ln' (VExp e) $ renameSingle ln ln' s'
 cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''

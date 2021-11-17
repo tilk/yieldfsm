@@ -39,7 +39,7 @@ makeLocalVarsStmt (SLet VarLet n vs s) = makeLocalVarsVStmt vs $ \e -> SLet VarL
 makeLocalVarsStmt (SLet VarMut n vs s) = makeLocalVarsVStmt vs $ \e -> do
     n' <- refreshName n
     SLet VarMut n' (VExp e) <$> locally lvDataMutVars (n':) (makeLocalVarsStmt $ renameSingle n n' s)
-makeLocalVarsStmt (SAssign n vs) = makeLocalVarsVStmt vs (return . SAssign n . VExp)
+makeLocalVarsStmt (SAssign n e) = return $ SAssign n e
 makeLocalVarsStmt (SRet vs) = do
     mvs <- view lvDataEnvVars
     mvs' <- mvsOf vs
@@ -78,5 +78,5 @@ makeLocalVarsVStmt (VCall f e) c = do
     vns <- replicateM (length mvs) $ makeName "v"
     s <- c $ TH.VarE rn
     return $ SLet VarLet n (VCall f $ tupE $ e:map TH.VarE mvs) $
-        SCase (TH.VarE n) [(tupP $ map TH.VarP $ rn:vns, sBlockS $ zipWith SAssign mvs (map (VExp . TH.VarE) vns) ++ [s])]
+        SCase (TH.VarE n) [(tupP $ map TH.VarP $ rn:vns, sBlockS $ zipWith SAssign mvs (map TH.VarE vns) ++ [s])]
 

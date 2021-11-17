@@ -140,8 +140,6 @@ parseHsFoldColon = parseHsFoldGen (\sc' -> unwords <$> some mysingle `sepBy1` tr
 parseHsFoldSymbol :: FreeVars a => String -> (String -> Either String a) -> Parser a
 parseHsFoldSymbol s = parseHsFold (\sc' -> L.symbol sc' s >> return id)
 
---idStyle = haskellIdents { _styleReserved = HS.fromList ["nop", "var", "let", "emit", "ret", "call", "if", "fun", "else", "begin", "end", "case"] }
-
 singleSymbol :: String -> Parser ()
 singleSymbol s = symbol sc s *> newlineOrEof
 
@@ -150,6 +148,12 @@ singleSymbolColon s = symbol sc s *> single ':' *> newlineOrEof
 
 parseName :: Parser () -> Parser TH.Name
 parseName sc' = TH.mkName <$> ident sc'
+
+vStmtToExp :: (TH.Exp -> Stmt) -> VStmt -> Parser Stmt
+vStmtToExp s (VExp e) = return $ s e
+vStmtTpExp s vs = do
+    n <- qlift $ TH.newName "e"
+    return $ SLet VarLet n vs (s n)
 
 parseVar :: Parser Stmt
 parseVar = do
@@ -161,7 +165,7 @@ parseAssign = do
     (i, vs) <- parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
     vm <- view prDataVars
     unless (M.lookup i vm == Just VarMut) $ fail $ "Invalid assignment target " ++ TH.nameBase i
-    return $ SAssign i vs
+    vStmtToExp (SAssign i) vs
 
 parseLet :: Parser Stmt
 parseLet = do
@@ -169,7 +173,9 @@ parseLet = do
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
 parseEmit :: Parser Stmt
-parseEmit = SYield <$> parseHsFoldSymbol "yield" stringToHsExp
+parseEmit = do
+    vs <- parseVStmt (\sc' -> L.symbol sc' "yield" >> return id)
+    vStmtToExp SYield vs
 
 parseRet :: Parser Stmt
 parseRet = mkRet =<< parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
@@ -226,7 +232,7 @@ parseRepeat = do
     ss <- parseLoopBody lvl f
     qlift $ sLet VarMut k (vExp $ return e) $
             sFun (M.singleton f (TH.tupP [], sIf [| $(TH.varE k) /= 0 |]
-                                                 (sBlock $ map return ss ++ [sAssign k $ vExp [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
+                                                 (sBlock $ map return ss ++ [sAssign k [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
                                                  (sRet $ vExp $ TH.tupE [])))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
@@ -238,7 +244,7 @@ parseRepeat1 = do
     ss <- parseLoopBody lvl f
     qlift $ sLet VarMut k (vExp [| $(return e) - 1 |]) $
             sFun (M.singleton f (TH.tupP [], sBlock $ map return ss ++ [sIf [| $(TH.varE k) /= 0 |]
-                                                                            (sBlock [sAssign k $ vExp $ [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
+                                                                            (sBlock [sAssign k [| $(TH.varE k) - 1 |], sRet $ vCall f $ TH.tupE []])
                                                                             (sRet $ vExp $ TH.tupE [])]))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
