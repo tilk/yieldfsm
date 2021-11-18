@@ -27,7 +27,10 @@ mkFSM str = do
         Right p -> do
             TH.runIO $ hPutStrLn stderr ""
             TH.runIO $ hPutStrLn stderr $ show $ progName p
-            p' <- deTailCall . previousInputs =<< refreshVars =<< refreshFunctions p
+            p1 <- desugarLoops p
+            TH.runIO $ hPutStrLn stderr $ "desugarLoops:"
+            TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p1
+            p' <- deTailCall . previousInputs =<< refreshVars =<< refreshFunctions p1
             TH.runIO $ hPutStrLn stderr $ "deTailCall:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- simplifyCase <$> makeLocalVars p'

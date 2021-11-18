@@ -10,7 +10,7 @@ import qualified Language.Haskell.TH as TH
 import FSM.Process.CallGraph
 import Data.Graph(stronglyConnComp, flattenSCC)
 
-funsStmt :: Stmt l -> S.Set TH.Name
+funsStmt :: IsDesugared l => Stmt l -> S.Set TH.Name
 funsStmt (SLet _ _ _ s) = funsStmt s
 funsStmt (SAssign _ _) = S.empty
 funsStmt (SYield _) = S.empty
@@ -47,15 +47,15 @@ tailCallSCCGen gr fs x = Partition pMap pSets pEdges
     funToGr n = M.singleton n S.empty
     toSCC (n, ns) = (n, n, S.toList ns)
 
-tailCallSCCFunMap :: FunMap l -> Partition TH.Name
+tailCallSCCFunMap :: IsDesugared l => FunMap l -> Partition TH.Name
 tailCallSCCFunMap = tailCallSCCGen callGraphFlat M.keys
 
-tailCallSCCStmt :: Stmt l -> Partition TH.Name
+tailCallSCCStmt :: IsDesugared l => Stmt l -> Partition TH.Name
 tailCallSCCStmt = tailCallSCCGen callGraph (S.toList . funsStmt)
 
-tailCallSCC :: Prog l -> Partition TH.Name
+tailCallSCC :: IsDesugared l => Prog l -> Partition TH.Name
 tailCallSCC = tailCallSCCStmt . progBody
 
-tailCallSCCN :: NProg l -> Partition TH.Name
+tailCallSCCN :: IsDesugared l => NProg l -> Partition TH.Name
 tailCallSCCN = tailCallSCCGen callGraphNProg (M.keys . nProgFuns)
 

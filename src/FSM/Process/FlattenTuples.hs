@@ -23,7 +23,7 @@ canFlattenVStmt ps (VCall n e)
     | Just p <- M.lookup n ps = canFlattenExp n p e
     | otherwise = S.singleton n
 
-canFlattenStmt :: NoFun l => PatMap -> Stmt l -> S.Set TH.Name
+canFlattenStmt :: IsLifted l => PatMap -> Stmt l -> S.Set TH.Name
 canFlattenStmt _  SNop = S.empty
 canFlattenStmt ps (SLet _ _ vs s) = canFlattenVStmt ps vs `S.union` canFlattenStmt ps s
 canFlattenStmt _  (SAssign _ _) = S.empty
@@ -33,7 +33,7 @@ canFlattenStmt ps (SBlock ss) = S.unions $ map (canFlattenStmt ps) ss
 canFlattenStmt ps (SIf _ st sf) = canFlattenStmt ps st `S.union` canFlattenStmt ps sf
 canFlattenStmt ps (SCase _ cs) = S.unions $ map (canFlattenStmt ps . snd) cs
 
-canFlattenFunMap :: NoFun l => PatMap -> FunMap l -> S.Set TH.Name
+canFlattenFunMap :: IsLifted l => PatMap -> FunMap l -> S.Set TH.Name
 canFlattenFunMap ps = S.unions . map (canFlattenStmt ps . snd . snd) . M.toList
 
 flattenExp :: TH.Pat -> TH.Exp -> TH.Exp
@@ -49,7 +49,7 @@ flattenVStmt ps (VCall n e)
     | Just p <- M.lookup n ps = VCall n (flattenExp p e)
     | otherwise = VCall n e
 
-flattenStmt :: NoFun l => PatMap -> Stmt l -> Stmt l
+flattenStmt :: IsLifted l => PatMap -> Stmt l -> Stmt l
 flattenStmt _  s@(SNop) = s
 flattenStmt ps   (SLet t n vs s) = SLet t n (flattenVStmt ps vs) (flattenStmt ps s)
 flattenStmt _  s@(SAssign _ _) = s
@@ -66,18 +66,18 @@ flattenPat p@(TH.TupP _) = tupP $ fl p
     fl p' = [p']
 flattenPat _ = error "Non-tuple pattern for flattening"
 
-flattenFun :: NoFun l => PatMap -> TH.Name -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
+flattenFun :: IsLifted l => PatMap -> TH.Name -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
 flattenFun ps n (p, s) | n `M.member` ps = (flattenPat p, flattenStmt ps s)
                        | otherwise = (p, flattenStmt ps s)
 
-flattenFunMap :: NoFun l => PatMap -> FunMap l -> FunMap l
+flattenFunMap :: IsLifted l => PatMap -> FunMap l -> FunMap l
 flattenFunMap ps fs = M.mapWithKey (flattenFun ps) fs
 
 isTupP :: TH.Pat -> Bool
 isTupP (TH.TupP _) = True
 isTupP _ = False
 
-flattenTuples :: NoFun l => NProg l -> NProg l
+flattenTuples :: IsLifted l => NProg l -> NProg l
 flattenTuples prog = prog {
         nProgFuns = flattenFunMap flatPat $ nProgFuns prog,
         nProgInitParam = if nProgInit prog `M.member` flatPat then initPar else nProgInitParam prog

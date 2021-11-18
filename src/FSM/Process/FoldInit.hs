@@ -15,7 +15,7 @@ myLet p e e' = TH.LetE [TH.ValD p (TH.NormalB e) []] e'
 maybeMkLet :: M.Map TH.Name VarKind -> TH.Pat -> TH.Exp -> TH.Exp -> TH.Exp
 maybeMkLet m p e e' = mmaybe (myLet p e e') id $ simplifyCaseGen (mkLetGen (const id) (\n -> myLet (TH.VarP n)) m) e p e'
 
-doFoldInit :: S.Set TH.Name -> NProg l -> NProg l
+doFoldInit :: IsDesugared l => S.Set TH.Name -> NProg l -> NProg l
 doFoldInit is prog
     | Just (p, SRet (VCall n e)) <- M.lookup (nProgInit prog) (nProgFuns prog),
         S.null (freeVars e `S.intersection` is) =
@@ -27,6 +27,6 @@ doFoldInit is prog
     where
     vmap = M.fromList (map (,VarMut) $ S.toList $ boundVars $ nProgInputs prog) `M.union` M.fromList (map (,VarLet) $ S.toList $ freeVarsFunMap (nProgFuns prog) `S.union` freeVars (nProgInitParam prog))
 
-foldInit :: NProg l -> NProg l
+foldInit :: IsDesugared l => NProg l -> NProg l
 foldInit prog = doFoldInit (boundVars $ nProgInputs prog) prog
 

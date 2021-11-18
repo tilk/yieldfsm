@@ -15,7 +15,7 @@ canCleanVStmt :: UFMap -> VStmt -> S.Set TH.Name
 canCleanVStmt _ (VExp _) = S.empty
 canCleanVStmt m (VCall n e) = canCleanExp m n e
 
-canCleanStmt :: NoFun l => UFMap -> Stmt l -> S.Set TH.Name
+canCleanStmt :: IsLifted l => UFMap -> Stmt l -> S.Set TH.Name
 canCleanStmt _ SNop = S.empty
 canCleanStmt m (SLet _ _ vs s) = canCleanVStmt m vs `S.union` canCleanStmt m s
 canCleanStmt _ (SAssign _ _) = S.empty
@@ -25,7 +25,7 @@ canCleanStmt m (SBlock ss) = S.unions $ map (canCleanStmt m) ss
 canCleanStmt m (SIf _ st sf) = canCleanStmt m st `S.union` canCleanStmt m sf
 canCleanStmt m (SCase _ cs) = S.unions $ map (canCleanStmt m . snd) cs
 
-canCleanFunMap :: NoFun l => UFMap -> FunMap l -> S.Set TH.Name
+canCleanFunMap :: IsLifted l => UFMap -> FunMap l -> S.Set TH.Name
 canCleanFunMap m = S.unions . map f . M.toList
     where 
     f (n, (p, s)) = canCleanPat m n p `S.union` canCleanStmt m s
@@ -42,7 +42,7 @@ canCleanExp m n e | Just (Right bs) <- r, or bs, TH.TupE mes <- e, all isJust me
                   | otherwise = S.singleton n
     where r = M.lookup n m
 
-unusedFunMap :: FunMap l -> UFMap
+unusedFunMap :: IsLifted l => FunMap l -> UFMap
 unusedFunMap = M.map f where
     f (p, s) | TH.TupP ps <- p = Right $ map g ps
              | otherwise       = Left $ g p
@@ -66,7 +66,7 @@ doCleanVStmt :: UFMap -> VStmt -> VStmt
 doCleanVStmt _ vs@(VExp _) = vs
 doCleanVStmt m (VCall n e) = VCall n (doCleanExp m n e)
 
-doCleanStmt :: NoFun l => UFMap -> Stmt l -> Stmt l
+doCleanStmt :: IsLifted l => UFMap -> Stmt l -> Stmt l
 doCleanStmt _ s@(SNop) = s
 doCleanStmt m   (SLet n t vs s) = SLet n t (doCleanVStmt m vs) (doCleanStmt m s)
 doCleanStmt _ s@(SAssign _ _) = s
@@ -76,11 +76,11 @@ doCleanStmt m   (SBlock ss) = SBlock $ map (doCleanStmt m) ss
 doCleanStmt m   (SIf e st sf) = SIf e (doCleanStmt m st) (doCleanStmt m sf)
 doCleanStmt m   (SCase e cs) = SCase e $ map (id *** doCleanStmt m) cs
 
-doCleanFunMap :: NoFun l => UFMap -> FunMap l -> FunMap l
+doCleanFunMap :: IsLifted l => UFMap -> FunMap l -> FunMap l
 doCleanFunMap m = M.mapWithKey f where
     f n (p, s) = (doCleanPat m n p, doCleanStmt m s)
 
-cleanUnusedArgs :: NoFun l => NProg l -> NProg l
+cleanUnusedArgs :: IsLifted l => NProg l -> NProg l
 cleanUnusedArgs prog = prog {
     nProgFuns = doCleanFunMap unuseds (nProgFuns prog),
     nProgInitParam = doCleanExp unuseds (nProgInit prog) (nProgInitParam prog)
