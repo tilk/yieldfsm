@@ -133,6 +133,7 @@ library
     FSM.Util.MultiSet
     FSM.Util.SetClass
     FSM.Util.MMaybe
+    FSM.Util.Qlift
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with yieldfsm project in scope
