@@ -21,7 +21,7 @@ data REData l = REData {
 
 $(makeLenses ''REData)
 
-removeEpsilonStmt :: (MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
+removeEpsilonStmt :: (IsLifted l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
                      Stmt l -> f (Stmt l)
 removeEpsilonStmt s@SNop = return s
 removeEpsilonStmt s@(SYield _) = return s
@@ -41,7 +41,7 @@ removeEpsilonStmt s@(SRet (VCall f e)) = do
         SCase e <$> (return . (p',) <$> removeEpsilonStmt (rename su s'))
 removeEpsilonStmt s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
 
-removeEpsilonFrom :: (MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
+removeEpsilonFrom :: (IsLifted l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
                      TH.Name -> f ()
 removeEpsilonFrom f = do
     (p, s) <- views reDataFunMap $ fromJust . M.lookup f
@@ -51,7 +51,7 @@ removeEpsilonFrom f = do
         s' <- locally reDataEmitted (const False) $ removeEpsilonStmt s
         modify $ M.insert f (p, s')
 
-removeEpsilon :: MonadRefresh m => NProg l -> m (NProg l)
+removeEpsilon :: (IsLifted l, MonadRefresh m) => NProg l -> m (NProg l)
 removeEpsilon prog = do
     fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) (boundVars $ nProgInputs prog) False) $ removeEpsilonFrom (nProgInit prog)
     return $ prog { nProgFuns = fs' }

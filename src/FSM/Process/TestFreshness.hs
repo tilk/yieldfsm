@@ -21,7 +21,7 @@ extend vs = do
         then put $ S.union vs vs'
         else error $ "Freshness check failed: " ++ show ivs
 
-testFreshnessStmt :: Stmt l -> FrM (Stmt l)
+testFreshnessStmt :: IsDesugared l => Stmt l -> FrM (Stmt l)
 testFreshnessStmt   (SLet t n vs s) = do
     extendSingle n 
     SLet t n vs <$> testFreshnessStmt s
@@ -39,14 +39,14 @@ testFreshnessPat p = do
     extend $ boundVars p
     return p
     
-testFreshnessCase :: (TH.Pat, Stmt l) -> FrM (TH.Pat, Stmt l)
+testFreshnessCase :: IsDesugared l => (TH.Pat, Stmt l) -> FrM (TH.Pat, Stmt l)
 testFreshnessCase (p, s) = (,) <$> testFreshnessPat p <*> testFreshnessStmt s
 
-testFreshnessFunMap :: FunMap l -> FunMap l
+testFreshnessFunMap :: IsDesugared l => FunMap l -> FunMap l
 testFreshnessFunMap = M.map testFreshnessFun
     where
     testFreshnessFun= flip evalState S.empty . testFreshnessCase
 
-testFreshness :: NProg l -> NProg l
+testFreshness :: IsDesugared l => NProg l -> NProg l
 testFreshness prog = prog { nProgFuns = testFreshnessFunMap $ nProgFuns prog }
 

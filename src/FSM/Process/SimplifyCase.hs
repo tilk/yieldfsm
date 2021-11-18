@@ -39,13 +39,13 @@ simplifyCaseGen _ _ _ _ = MNoNo
 
 type KindMap = M.Map TH.Name VarKind
 
-simplifyCase1 :: KindMap -> TH.Exp -> TH.Pat -> Stmt l -> MMaybe (Stmt l)
+simplifyCase1 :: IsDesugared l => KindMap -> TH.Exp -> TH.Pat -> Stmt l -> MMaybe (Stmt l)
 simplifyCase1 m = simplifyCaseGen (mkLet m VarLet)
 
-simplifyCaseDo :: KindMap -> TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
+simplifyCaseDo :: IsDesugared l => KindMap -> TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
 simplifyCaseDo m e cs = mmaybe (SCase e (map (simplifyCaseCase m) cs)) id $ msum (map (uncurry $ simplifyCase1 m e) cs)
 
-simplifyCaseCase :: KindMap -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
+simplifyCaseCase :: IsDesugared l => KindMap -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
 simplifyCaseCase m (p, s) = (p, simplifyCaseStmt (setVars VarLet (boundVars p) m) s)
 
 mkLetGen :: (FreeVars a, Subst a) => (KindMap -> a -> a) -> (TH.Name -> TH.Exp -> a -> a) -> KindMap -> TH.Name -> TH.Exp -> a -> a
@@ -54,7 +54,7 @@ mkLetGen f g m n e s
     | isConstantExpr e || S.null (freeVars e `S.difference` M.keysSet (M.filter (== VarLet) m)) && MS.lookup n (freeVars s) <= 1 = f m $ substSingle n e s
     | otherwise = g n e $ f (M.insert n VarLet m) s
 
-mkLet :: KindMap -> VarKind -> TH.Name -> TH.Exp -> Stmt l -> Stmt l
+mkLet :: IsDesugared l => KindMap -> VarKind -> TH.Name -> TH.Exp -> Stmt l -> Stmt l
 mkLet m t n e s
     | not (canSubst t) = SLet t n (VExp e) $ simplifyCaseStmt (M.insert n t m) s
     | otherwise = mkLetGen simplifyCaseStmt (\n' e' -> SLet VarLet n' (VExp e')) m n e s
@@ -62,7 +62,7 @@ mkLet m t n e s
     canSubst VarLet = True
     canSubst VarMut = not $ hasAssigns n s
 
-simplifyCaseStmt :: KindMap -> Stmt l -> Stmt l
+simplifyCaseStmt :: IsDesugared l => KindMap -> Stmt l -> Stmt l
 simplifyCaseStmt m   (SCase e cs) = simplifyCaseDo m e cs
 simplifyCaseStmt _ e@(SRet _) = e
 simplifyCaseStmt _ e@(SAssign _ _) = e
@@ -74,15 +74,15 @@ simplifyCaseStmt _ e@SNop = e
 simplifyCaseStmt m   (SLet t n (VExp e) s) = mkLet m t n e s
 simplifyCaseStmt m   (SLet t n vs s) = SLet t n vs (simplifyCaseStmt m s)
 
-simplifyCaseFunMap :: KindMap -> FunMap l -> FunMap l
+simplifyCaseFunMap :: IsDesugared l => KindMap -> FunMap l -> FunMap l
 simplifyCaseFunMap m = M.map (simplifyCaseCase m)
 
-simplifyCase :: Prog l -> Prog l
+simplifyCase :: IsDesugared l => Prog l -> Prog l
 simplifyCase prog = prog { progBody = simplifyCaseStmt m $ progBody prog }
     where
     m = setVars VarMut (boundVars $ progInputs prog) $ setVars VarLet (freeVars $ progBody prog) M.empty
 
-simplifyCaseN :: NProg l -> NProg l
+simplifyCaseN :: IsDesugared l => NProg l -> NProg l
 simplifyCaseN prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
     where
     m = setVars VarMut (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
@@ -90,7 +90,7 @@ simplifyCaseN prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
 setVars :: VarKind -> S.Set TH.Name -> KindMap -> KindMap
 setVars t s m = M.fromList (map (, t) $ S.toList s) `M.union` m
 
-hasAssigns :: TH.Name -> Stmt l -> Bool
+hasAssigns :: IsDesugared l => TH.Name -> Stmt l -> Bool
 hasAssigns n (SIf _ st sf) = hasAssigns n st || hasAssigns n sf
 hasAssigns n (SCase _ cs) = any (hasAssigns n . snd) cs
 hasAssigns _ (SRet _) = False

@@ -5,15 +5,28 @@ import qualified Data.Map.Strict as M
 import Data.Kind(Type)
 import Prelude
 
-data Lvl = LvlFull
+data Lvl = LvlSugared
+         | LvlFull
          | LvlLowest
+
+type family HasLoops (l :: Lvl) :: Bool
+type WithLoops l = HasLoops l ~ 'True
+type NoLoops l = HasLoops l ~ 'False
+
+type instance HasLoops 'LvlSugared = 'True
+type instance HasLoops 'LvlFull = 'False
+type instance HasLoops 'LvlLowest = 'False
 
 type family HasFun (l :: Lvl) :: Bool
 type WithFun l = HasFun l ~ 'True
 type NoFun l = HasFun l ~ 'False
 
+type instance HasFun 'LvlSugared = 'True
 type instance HasFun 'LvlFull = 'True
 type instance HasFun 'LvlLowest = 'False
+
+type IsDesugared l = NoLoops l
+type IsLifted l = (IsDesugared l, NoFun l)
 
 type FunMap l = M.Map TH.Name (TH.Pat, Stmt l)
 
@@ -23,12 +36,25 @@ data VStmt = VExp TH.Exp
 
 data VarKind = VarLet | VarMut deriving (Show, Eq)
 
+data BrkType = BrkCont | BrkBrk deriving (Show, Eq)
+
+data WhileType = WhileWhile | WhileUntil deriving (Show, Eq)
+
+data IterType = IterWhile | IterDoWhile deriving (Show, Eq)
+
+data LoopType = LoopForever
+              | LoopWhile IterType WhileType TH.Exp
+              | LoopRepeat IterType TH.Exp
+    deriving (Show, Eq)
+
 data Stmt :: Lvl -> Type where
+    SLoop   :: WithLoops l => LoopType -> Stmt l -> Stmt l
+    SBreak  :: WithLoops l => BrkType -> Stmt l
+    SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
     SAssign :: TH.Name -> TH.Exp -> Stmt l
     SYield  :: TH.Exp -> Stmt l
     SRet    :: VStmt -> Stmt l
-    SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SBlock  :: [Stmt l] -> Stmt l
     SIf     :: TH.Exp -> Stmt l -> Stmt l -> Stmt l
     SCase   :: TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
@@ -69,7 +95,7 @@ tupP :: [TH.Pat] -> TH.Pat
 tupP [x] = x
 tupP xs = TH.TupP xs
 
-emittingStmt :: Stmt l -> Bool
+emittingStmt :: IsLifted l => Stmt l -> Bool
 emittingStmt (SBlock [SYield _, _]) = True
 emittingStmt SNop = False
 emittingStmt (SRet _) = False

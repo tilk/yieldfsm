@@ -25,7 +25,7 @@ nodePairs ce p = f (cgEdgeArg ce) p
     f e (TH.VarP n) = [(GNode (cgEdgeSrc ce) e, GNode (cgEdgeDst ce) (TH.VarE n))]
     f _ _ = []
 
-makeGraph :: FunMap l -> CG -> [(GNode, GNode)]
+makeGraph :: IsDesugared l => FunMap l -> CG -> [(GNode, GNode)]
 makeGraph fs = concatMap edgeVals
     where
     edgeVals e | Just (p, _) <- M.lookup (cgEdgeDst e) fs = nodePairs e p
@@ -53,13 +53,13 @@ subPerFun = M.fromListWith M.union . map (gNodeFun . fst &&& (f . (gNodeExp . fs
     f (TH.VarE n, e) = M.singleton n e
     f _ = M.empty
 
-extendFuns :: M.Map TH.Name (M.Map TH.Name TH.Exp) -> FunMap l -> FunMap l
+extendFuns :: IsDesugared l => M.Map TH.Name (M.Map TH.Name TH.Exp) -> FunMap l -> FunMap l
 extendFuns sub fs = M.mapWithKey f fs
     where
     f n (p, s) = (p, foldr g s (M.toList $ maybe M.empty id $ M.lookup n sub))
     g (n, e) s = SLet VarLet n (VExp e) s
 
-argumentPropagation :: NProg l -> NProg l
+argumentPropagation :: IsDesugared l => NProg l -> NProg l
 argumentPropagation prog = prog {
         nProgFuns = extendFuns sub $ nProgFuns prog
     }

@@ -49,7 +49,7 @@ instance FreeVars a => FreeVars (Maybe a) where
 instance FreeVarsPat a => FreeVarsPat (Maybe a) where
     freeVarsPat = maybe mempty id . fmap freeVarsPat
 
-freeVarsFunMap :: SC.SetClass s => FunMap l -> s TH.Name
+freeVarsFunMap :: (IsDesugared l, SC.SetClass s) => FunMap l -> s TH.Name
 freeVarsFunMap = mconcat . map (\(_, (p, s)) -> freeVars s `freeVarsUnderPat` p) . M.toList
 
 freeVarsGuardedExp :: SC.SetClass s => (TH.Guard, TH.Exp) -> s TH.Name
@@ -156,7 +156,7 @@ instance FreeVars VStmt where
     freeVars (VExp e) = freeVars e
     freeVars (VCall _ e) = freeVars e
 
-instance FreeVars (Stmt l) where
+instance IsDesugared l => FreeVars (Stmt l) where
     freeVars (SLet _ v vs s) = freeVars vs <> (freeVars s `freeVarsUnderPat` (TH.VarP v))
     freeVars (SAssign _ vs) = freeVars vs
     freeVars (SYield e) = freeVars e
@@ -167,7 +167,7 @@ instance FreeVars (Stmt l) where
     freeVars (SCase e cs) = freeVars e <> mconcat (flip map cs $ \(p, s) -> freeVars s `freeVarsUnderPat` p)
     freeVars (SNop) = mempty
 
-instance FreeVars (Prog l) where
+instance IsDesugared l => FreeVars (Prog l) where
     freeVars prog = freeVars (progBody prog) `SC.difference` boundVars (progInputs prog) `SC.difference` boundVars (progParams prog)
 
 instance FreeVars a => FreeVars [a] where
@@ -283,7 +283,7 @@ cutSubst (PatFV vs _) s = M.withoutKeys s vs
 cutSubstPat :: FreeVarsPat a => a -> M.Map TH.Name b -> M.Map TH.Name b
 cutSubstPat p = cutSubst (freeVarsPat p)
 
-instance Subst (Stmt l) where
+instance IsDesugared l => Subst (Stmt l) where
     subst su   (SLet t v vs s) = SLet t v (subst su' vs) (subst su' s)
         where su' = cutSubst (patSingleton v) su
     subst su   (SAssign v vs) = SAssign n' (subst su vs)

@@ -13,11 +13,11 @@ saturateSet m = flip g S.empty where
     f n s | n `S.member` s = s
           | otherwise = g (m n) (S.insert n s)
 
-directRetFunMap :: FunMap l -> S.Set TH.Name
+directRetFunMap :: IsDesugared l => FunMap l -> S.Set TH.Name
 directRetFunMap fs = S.fromList [n | (n, (_, s')) <- M.toList fs, isReturningStmt s']
                      `S.union` (S.unions $ map (directRet . snd . snd) $ M.toList fs)
 
-directRet :: Stmt l -> S.Set TH.Name
+directRet :: IsDesugared l => Stmt l -> S.Set TH.Name
 directRet SNop = S.empty
 directRet (SYield _) = S.empty
 directRet (SLet _ _ _ s) = directRet s
@@ -33,13 +33,13 @@ returningFunsH cg ns = saturateSet (flip (M.findWithDefault S.empty) tailCalled)
     where
     tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail cg
 
-returningFuns :: Stmt l -> S.Set TH.Name
+returningFuns :: IsDesugared l => Stmt l -> S.Set TH.Name
 returningFuns s = returningFunsH (callGraph s) (directRet s)
 
-returningFunsFlat :: FunMap l -> S.Set TH.Name
+returningFunsFlat :: IsDesugared l => FunMap l -> S.Set TH.Name
 returningFunsFlat fs = returningFunsH (callGraphFlat fs) (directRetFunMap fs)
 
-isReturningStmt :: Stmt l -> Bool
+isReturningStmt :: IsDesugared l => Stmt l -> Bool
 isReturningStmt SNop = False
 isReturningStmt (SYield _) = False
 isReturningStmt (SLet _ _ _ s) = isReturningStmt s
