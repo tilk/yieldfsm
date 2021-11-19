@@ -5,6 +5,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Prelude
 import FSM.Lang
+import FSM.Desc
 import Control.Arrow
 import qualified FSM.Util.SetClass as SC
 
@@ -169,6 +170,15 @@ instance IsDesugared l => FreeVars (Stmt l) where
 
 instance IsDesugared l => FreeVars (Prog l) where
     freeVars prog = freeVars (progBody prog) `SC.difference` boundVars (progInputs prog) `SC.difference` boundVars (progParams prog)
+
+instance FreeVars Transition where
+    freeVars (Transition e1 _ e2) = freeVars e1 <> freeVars e2
+
+instance FreeVars a => FreeVars (DecisionTree a) where
+    freeVars (DTIf e t1 t2) = freeVars e <> freeVars t1 <> freeVars t2
+    freeVars (DTLet p e t) = freeVars e <> (freeVars t `freeVarsUnderPat` p)
+    freeVars (DTCase e cs) = freeVars e <> mconcat (flip map cs $ \(p, s) -> freeVars s `freeVarsUnderPat` p)
+    freeVars (DTLeaf a) = freeVars a
 
 instance FreeVars a => FreeVars [a] where
     freeVars ss = mconcat $ map freeVars ss

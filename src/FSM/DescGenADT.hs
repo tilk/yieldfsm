@@ -3,8 +3,11 @@ module FSM.DescGenADT where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 import Control.Monad
+import Control.Arrow
 import FSM.Desc
+import FSM.FreeVars
 import Prelude
 import Data.List(foldl', nub)
 import Data.Maybe(fromJust)
@@ -53,6 +56,26 @@ tupT [] = TH.TupleT 0
 tupT [t] = t
 tupT ts = foldl TH.AppT (TH.TupleT (length ts)) ts
 
+wildUnused :: S.Set TH.Name -> TH.Pat -> TH.Pat
+wildUnused _ p@(TH.LitP _) = p
+wildUnused s p@(TH.VarP n) | n `S.member` s = p
+                                 | otherwise = TH.WildP
+wildUnused s   (TH.TupP ps) = TH.TupP $ wildUnused s <$> ps
+wildUnused s   (TH.UnboxedTupP ps) = TH.UnboxedTupP $ wildUnused s <$> ps
+wildUnused s   (TH.UnboxedSumP p al ar) = TH.UnboxedSumP (wildUnused s p) al ar
+wildUnused s   (TH.ConP n ps) = TH.ConP n $ wildUnused s <$> ps
+wildUnused s   (TH.InfixP p1 n p2) = TH.InfixP (wildUnused s p1) n (wildUnused s p2)
+wildUnused s   (TH.UInfixP p1 n p2) = TH.UInfixP (wildUnused s p1) n (wildUnused s p2)
+wildUnused s   (TH.ParensP p) = TH.ParensP $ wildUnused s p
+wildUnused s   (TH.TildeP p) = TH.TildeP $ wildUnused s p
+wildUnused s   (TH.BangP p) = TH.BangP $ wildUnused s p
+wildUnused s   (TH.AsP n p) = TH.AsP n $ wildUnused s p
+wildUnused _   (TH.WildP) = TH.WildP
+wildUnused s   (TH.RecP n fps) = TH.RecP n $ (id *** wildUnused s) <$> fps
+wildUnused s   (TH.ListP ps) = TH.ListP $ wildUnused s <$> ps
+wildUnused s   (TH.SigP p t) = TH.SigP (wildUnused s p) t
+wildUnused s   (TH.ViewP e p) = TH.ViewP e $ wildUnused s p
+
 compileFSM :: FSM -> TH.Q [TH.Dec]
 compileFSM fsm = do
     let nm = TH.nameBase $ fsmName fsm
@@ -66,7 +89,7 @@ compileFSM fsm = do
     let stateCons = map snd stateData
     let tvars = map TH.PlainTV $ fst =<< stateData
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
-        TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ maybe (TH.TupP []) id $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
+        TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ wildUnused (freeVars $ fsmStateTrans s) $ maybe (TH.TupP []) id $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
     contDecls <- forM (M.assocs $ fsmConts fsm) $ \(n, cs) -> do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' [(b, tupT $ map TH.VarT ns)]
         let contTvars = map TH.PlainTV $ nub $ concat (M.elems cs)
