@@ -14,7 +14,7 @@ import Prelude
 import Text.Megaparsec
 import System.IO
 
-optimize :: NProg 'LvlLowest -> NProg 'LvlLowest
+optimize :: NProg LvlLowest -> NProg LvlLowest
 optimize np | np == np' = np'
             | otherwise = optimize np'
     where

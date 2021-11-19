@@ -4,26 +4,20 @@ import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M
 import Data.Kind(Type)
 import Prelude
+import GHC.TypeLits
 
-data Lvl = LvlSugared
-         | LvlFull
-         | LvlLowest
+type Lvl = Nat
+type LvlSugared = 2
+type LvlFull = 1
+type LvlLowest = 0
 
-type family HasLoops (l :: Lvl) :: Bool
+type HasLoops l = LvlSugared <=? l
 type WithLoops l = HasLoops l ~ 'True
 type NoLoops l = HasLoops l ~ 'False
 
-type instance HasLoops 'LvlSugared = 'True
-type instance HasLoops 'LvlFull = 'False
-type instance HasLoops 'LvlLowest = 'False
-
-type family HasFun (l :: Lvl) :: Bool
+type HasFun l = LvlFull <=? l
 type WithFun l = HasFun l ~ 'True
 type NoFun l = HasFun l ~ 'False
-
-type instance HasFun 'LvlSugared = 'True
-type instance HasFun 'LvlFull = 'True
-type instance HasFun 'LvlLowest = 'False
 
 type IsDesugared l = NoLoops l
 type IsLifted l = (IsDesugared l, NoFun l)

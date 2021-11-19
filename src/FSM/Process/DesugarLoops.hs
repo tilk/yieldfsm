@@ -26,7 +26,7 @@ wtIfQ :: WhileType -> TH.Exp -> StmtQ t -> StmtQ t -> StmtQ t
 wtIfQ WhileWhile = sIf . return
 wtIfQ WhileUntil = flip . sIf . return
 
-desugarLoopsLoop :: (Qlift m, MonadRefresh m, MonadReader RData m) => TH.Name -> LoopType -> Stmt 'LvlFull -> m (Stmt 'LvlFull)
+desugarLoopsLoop :: (Qlift m, MonadRefresh m, MonadReader RData m) => TH.Name -> LoopType -> Stmt LvlFull -> m (Stmt LvlFull)
 desugarLoopsLoop f LoopForever s = do
     let scall = SRet $ VCall f $ TH.TupE []
     return $ SFun (M.singleton f (TH.TupP [], SBlock [s, scall])) scall
@@ -51,7 +51,7 @@ desugarLoopsLoop f (LoopWhile IterDoWhile wt e) s = do
     qlift $ sFun (M.singleton f (TH.tupP [], sBlock $ [return s, wtIfQ wt e (sRet $ vCall f $ TH.tupE []) (sRet $ vExp $ TH.tupE [])]))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-desugarLoopsStmt :: (Qlift m, MonadRefresh m, MonadReader RData m) => Stmt 'LvlSugared -> m (Stmt 'LvlFull)
+desugarLoopsStmt :: (Qlift m, MonadRefresh m, MonadReader RData m) => Stmt LvlSugared -> m (Stmt LvlFull)
 desugarLoopsStmt (SLoop lt s) = do
     f <- makeName $ ltName lt
     s' <- locally rDataLoop (const $ Just f) $ desugarLoopsStmt s
@@ -77,7 +77,7 @@ desugarLoopsStmt (SIf e st sf) = SIf e <$> desugarLoopsStmt st <*> desugarLoopsS
 desugarLoopsStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> desugarLoopsStmt s) cs
 desugarLoopsStmt (SNop) = return SNop
 
-desugarLoops :: (Qlift m, MonadRefresh m) => Prog 'LvlSugared -> m (Prog 'LvlFull)
+desugarLoops :: (Qlift m, MonadRefresh m) => Prog LvlSugared -> m (Prog LvlFull)
 desugarLoops prog = do
     b <- flip runReaderT (RData Nothing) $ desugarLoopsStmt $ progBody prog
     return $ prog { progBody = b }

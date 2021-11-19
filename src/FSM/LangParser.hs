@@ -132,44 +132,44 @@ singleSymbolColon s = symbol sc s *> single ':' *> newlineOrEof
 parseName :: Parser () -> Parser TH.Name
 parseName sc' = TH.mkName <$> ident sc'
 
-vStmtToExp :: (TH.Exp -> Stmt 'LvlSugared) -> VStmt -> Parser (Stmt 'LvlSugared)
+vStmtToExp :: (TH.Exp -> Stmt LvlSugared) -> VStmt -> Parser (Stmt LvlSugared)
 vStmtToExp s (VExp e) = return $ s e
 vStmtToExp s vs = do
     n <- qlift $ TH.newName "e"
     return $ SLet VarLet n vs (s $ TH.VarE n)
 
-parseVar :: Parser (Stmt 'LvlSugared)
+parseVar :: Parser (Stmt LvlSugared)
 parseVar = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "var" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarMut) $ SLet VarMut i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseAssign :: Parser (Stmt 'LvlSugared)
+parseAssign :: Parser (Stmt LvlSugared)
 parseAssign = do
     (i, vs) <- parseVStmt (\sc' -> (,) <$> parseName sc' <* symbolic sc' '=')
     vm <- view prDataVars
     unless (M.lookup i vm == Just VarMut) $ fail $ "Invalid assignment target " ++ TH.nameBase i
     vStmtToExp (SAssign i) vs
 
-parseLet :: Parser (Stmt 'LvlSugared)
+parseLet :: Parser (Stmt LvlSugared)
 parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseEmit :: Parser (Stmt 'LvlSugared)
+parseEmit :: Parser (Stmt LvlSugared)
 parseEmit = do
     vs <- parseVStmt (\sc' -> L.symbol sc' "yield" >> return id)
     vStmtToExp SYield vs
 
-parseRet :: Parser (Stmt 'LvlSugared)
+parseRet :: Parser (Stmt LvlSugared)
 parseRet = SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
 
-parseIf :: Parser (Stmt 'LvlSugared)
+parseIf :: Parser (Stmt LvlSugared)
 parseIf = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "if") stringToHsExp
     SIf e <$> (L.indentGuard scn GT lvl *> parseStmt)
           <*> ((try (L.indentGuard scn EQ lvl *> singleSymbolColon "else") *> L.indentGuard scn GT lvl *> parseStmt) <|> return SNop)
 
-parseFun :: Parser (Stmt 'LvlSugared)
+parseFun :: Parser (Stmt LvlSugared)
 parseFun = do
     (lvl, n, p) <- parseHsFoldColon (\sc' -> (,,) <$> L.indentLevel <* L.symbol sc' "fun" <*> parseName sc') stringToHsPat
     first <- (L.indentGuard scn GT lvl *> parseFunBody n p)
@@ -178,32 +178,32 @@ parseFun = do
         L.indentGuard scn GT lvl *> parseFunBody n' p'
     SFun (M.fromList $ first:rest) <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt 'LvlSugared))
+parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt LvlSugared))
 parseFunBody n p = do
     s <- locally prDataVars (M.union $ boundVarsEnv p) $ parseStmt
     return (n, (p, SBlock [s, SRet $ VExp $ TH.VarE 'undefined]))
 
-parseBlock :: Parser (Stmt 'LvlSugared)
+parseBlock :: Parser (Stmt LvlSugared)
 parseBlock = do
     lvl <- L.indentLevel <* singleSymbolColon "begin"
     SBlock <$> many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
-parseForever :: Parser (Stmt 'LvlSugared)
+parseForever :: Parser (Stmt LvlSugared)
 parseForever = do
     lvl <- L.indentLevel <* singleSymbolColon "forever"
     ss <- parseLoopBody lvl
     return $ SLoop LoopForever $ SBlock ss
 
-parseLoopBody :: Pos -> Parser [Stmt 'LvlSugared]
+parseLoopBody :: Pos -> Parser [Stmt LvlSugared]
 parseLoopBody lvl = many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
-parseRepeat :: Parser (Stmt 'LvlSugared)
+parseRepeat :: Parser (Stmt LvlSugared)
 parseRepeat = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat") stringToHsExp
     ss <- parseLoopBody lvl
     return $ SLoop (LoopRepeat IterWhile e) $ SBlock ss
 
-parseRepeat1 :: Parser (Stmt 'LvlSugared)
+parseRepeat1 :: Parser (Stmt LvlSugared)
 parseRepeat1 = do
     (lvl, e) <- parseHsFoldColon (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "repeat1") stringToHsExp
     ss <- parseLoopBody lvl
@@ -212,39 +212,39 @@ parseRepeat1 = do
 parseWhileUntilHelp :: Parser () -> Parser (TH.Exp -> (WhileType, TH.Exp))
 parseWhileUntilHelp sc' = (L.symbol sc' "while" *> return (WhileWhile,)) <|> (L.symbol sc' "until" *> return (WhileUntil,))
 
-parseWhile :: Parser (Stmt 'LvlSugared)
+parseWhile :: Parser (Stmt LvlSugared)
 parseWhile = do
     (lvl, (wt, e)) <- parseHsFoldColon (\sc' -> (\a k -> (a,) . k) <$> L.indentLevel <*> parseWhileUntilHelp sc') stringToHsExp
     ss <- parseLoopBody lvl
     return $ SLoop (LoopWhile IterWhile wt e) $ SBlock ss
 
-parseDoWhile :: Parser (Stmt 'LvlSugared)
+parseDoWhile :: Parser (Stmt LvlSugared)
 parseDoWhile = do
     lvl <- L.indentLevel <* singleSymbolColon "do"
     ss <- parseLoopBody lvl
     (wt, e) <- L.indentGuard scn EQ lvl *> parseHsFold parseWhileUntilHelp stringToHsExp
     return $ SLoop (LoopWhile IterDoWhile wt e) $ SBlock ss
 
-parseCase :: Parser (Stmt 'LvlSugared)
+parseCase :: Parser (Stmt LvlSugared)
 parseCase = do
     (lvl, e) <- parseHsFold (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "case") stringToHsExp
     cs <- some $ (,) <$> parseHsFoldColon (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id) stringToHsPat
                      <*> (L.indentGuard scn GT lvl *> parseStmt)
     return $ SCase e cs
 
-parseNop :: Parser (Stmt 'LvlSugared)
+parseNop :: Parser (Stmt LvlSugared)
 parseNop = singleSymbol "nop" *> return SNop
 
-parseContinue :: Parser (Stmt 'LvlSugared)
+parseContinue :: Parser (Stmt LvlSugared)
 parseContinue = singleSymbol "continue" >> return (SBreak BrkCont)
 
-parseBreak :: Parser (Stmt 'LvlSugared)
+parseBreak :: Parser (Stmt LvlSugared)
 parseBreak = singleSymbol "break" >> return (SBreak BrkBrk)
 
-parseCall :: Parser (Stmt 'LvlSugared)
+parseCall :: Parser (Stmt LvlSugared)
 parseCall = (\vs -> SLet VarLet (TH.mkName "_") vs SNop) <$> parseHsFold (\sc' -> VCall <$> (L.symbol sc' "call" *> parseName sc')) stringToHsExp
 
-parseBasicStmt :: Parser (Stmt 'LvlSugared)
+parseBasicStmt :: Parser (Stmt LvlSugared)
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseEmit
@@ -264,12 +264,12 @@ parseBasicStmt = parseVar
              <|> parseWhile
              <|> parseDoWhile
 
-mkStmt :: [Stmt 'LvlSugared] -> Stmt 'LvlSugared
+mkStmt :: [Stmt LvlSugared] -> Stmt LvlSugared
 mkStmt [] = SNop
 mkStmt [s] = s
 mkStmt ss = SBlock ss
 
-parseStmt :: Parser (Stmt 'LvlSugared)
+parseStmt :: Parser (Stmt LvlSugared)
 parseStmt = do
     lvl <- L.indentLevel
     mkStmt <$> (some $ try (L.indentGuard scn EQ lvl >> notFollowedBy eof) *> parseBasicStmt)
@@ -277,7 +277,7 @@ parseStmt = do
 parseVStmt :: (Parser () -> Parser (VStmt -> a)) -> Parser a
 parseVStmt pfx = parseHsFold (\sc' -> (.) <$> pfx sc' <*> (VCall <$> (L.symbol sc' "call" *> parseName sc') <|> return VExp)) stringToHsExp
 
-parseProg :: Parser (Prog 'LvlSugared)
+parseProg :: Parser (Prog LvlSugared)
 parseProg = do
     (i, t) <- parseHsFold (\sc' -> L.indentGuard (return ()) EQ pos1 *> ((,) <$> parseName sc' <* L.symbol sc' "::")) stringToHsType
     ps <- many (try $ L.nonIndented scn $ parseHsFoldSymbol "param" stringToHsPat)
@@ -286,6 +286,6 @@ parseProg = do
     scn *> eof
     return $ Prog i t ps is s
 
-runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog 'LvlSugared))
+runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog LvlSugared))
 runParseProg s = runParserT (runReaderT parseProg prData) "" s
 
