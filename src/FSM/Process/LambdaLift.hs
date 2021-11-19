@@ -23,7 +23,7 @@ type LLEnv = M.Map TH.Name (TH.Name, [TH.Name])
 
 $(makeLenses ''LLData)
 
-lambdaLiftStmt :: (MonadRefresh m, MonadState (FunMap LvlLowest) m, MonadReader LLData m) => Stmt LvlFull -> m (Stmt LvlLowest)
+lambdaLiftStmt :: (MonadRefresh m, MonadState (FunMap LvlLifted) m, MonadReader LLData m) => Stmt LvlFull -> m (Stmt LvlLifted)
 lambdaLiftStmt (SLet t ln vs s) = do
     ln' <- refreshName ln
     SLet t ln' <$> lambdaLiftVStmt vs <*> lambdaLiftStmt (renameSingle ln ln' s)
@@ -52,7 +52,7 @@ lambdaLiftVStmt    (VCall n e) = do
     (n', vs) <- views llDataEnv (fromJust . M.lookup n)
     return $ VCall n' $ tupE $ map TH.VarE vs ++ [e]
 
-lambdaLift :: MonadRefresh m => Prog LvlFull -> m (NProg LvlLowest)
+lambdaLift :: MonadRefresh m => Prog LvlFull -> m (NProg LvlLifted)
 lambdaLift prog = do
     (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVars $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)
     f <- refreshName $ TH.mkName "init"

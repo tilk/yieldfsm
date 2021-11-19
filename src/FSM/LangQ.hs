@@ -23,7 +23,7 @@ vCall n e = VCall n <$> e
 sLet :: VarKind -> TH.Name -> VStmtQ -> StmtQ l -> StmtQ l
 sLet k n vs s = SLet k n <$> vs <*> s
 
-sAssign :: TH.Name -> TH.ExpQ -> StmtQ l
+sAssign :: WithAssign l => TH.Name -> TH.ExpQ -> StmtQ l
 sAssign n e = SAssign n <$> e
 
 sYield :: TH.ExpQ -> StmtQ l
@@ -44,7 +44,7 @@ sIf e st sf = SIf <$> e <*> st <*> sf
 sCase :: TH.ExpQ -> [(TH.PatQ, StmtQ l)] -> StmtQ l
 sCase e cs = SCase <$> e <*> sequence (map psequence cs)
 
-sNop :: StmtQ l
+sNop :: WithNop l => StmtQ l
 sNop = return SNop
 
 

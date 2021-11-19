@@ -17,7 +17,7 @@ data CBData = CBData {
     cbDataName :: TH.Name
 }
 
-makeCont :: (IsLifted l, MonadReader CBData m, MonadRefresh m, MonadState (FunMap l) m) => Stmt l -> m (Stmt l)
+makeCont :: (MonadReader CBData m, MonadRefresh m, MonadState (FunMap LvlLowest) m) => Stmt LvlLowest -> m (Stmt LvlLowest)
 makeCont s = do
     CBData fv _ n <- ask
     let vs = S.toList $ freeVars s `S.difference` fv
@@ -25,7 +25,7 @@ makeCont s = do
     modify $ M.insert n' (tupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
-cutBlocksStmt :: (IsLifted l, MonadRefresh m, MonadState (FunMap l) m, MonadReader CBData m) => Stmt l -> Stmt l -> m (Stmt l)
+cutBlocksStmt :: (MonadRefresh m, MonadState (FunMap LvlLowest) m, MonadReader CBData m) => Stmt LvlLifted -> Stmt LvlLowest -> m (Stmt LvlLowest)
 cutBlocksStmt SNop         s' = return s'
 cutBlocksStmt (SRet vs)    _  = return $ SRet vs
 cutBlocksStmt (SBlock [])  s' = return s'
@@ -62,7 +62,7 @@ cutBlocksStmt s s' = do
     s'' <- makeCont s'
     cutBlocksStmt s s''
 
-cutBlocks :: (IsLifted l, MonadRefresh m) => NProg l -> m (NProg l)
+cutBlocks :: MonadRefresh m => NProg LvlLifted -> m (NProg LvlLowest)
 cutBlocks prog = do
     let fvs = freeVarsFunMap $ nProgFuns prog
     let ivs = boundVars $ nProgInputs prog

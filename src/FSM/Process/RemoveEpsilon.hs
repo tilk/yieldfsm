@@ -47,7 +47,7 @@ removeEpsilonFrom f = do
     (p, s) <- views reDataFunMap $ fromJust . M.lookup f
     b <- gets (M.member f)
     unless b $ do
-        modify $ M.insert f (p, SNop)
+        modify $ M.insert f (p, error "BUG in removeEpsilon")
         s' <- locally reDataEmitted (const False) $ removeEpsilonStmt s
         modify $ M.insert f (p, s')
 

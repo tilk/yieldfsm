@@ -9,7 +9,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 
-updateYieldsStmt :: IsDesugared l => [Stmt l] -> Stmt l -> Stmt l
+updateYieldsStmt :: (IsDesugared l, WithAssign l) => [Stmt l] -> Stmt l -> Stmt l
 updateYieldsStmt ss s@(SYield _) = SBlock $ ss ++ [s]
 updateYieldsStmt ss   (SBlock ss1) = SBlock $ map (updateYieldsStmt ss) ss1
 updateYieldsStmt _  s@SNop = s
@@ -27,10 +27,10 @@ newVars (n, k) = (primName n k, primName n (k-1)):newVars (n, k-1)
 primName :: String -> Int -> TH.Name
 primName n k = TH.mkName $ n ++ replicate k '\''
 
-addVar :: IsDesugared l => TH.Name -> Stmt l -> Stmt l
+addVar :: (IsDesugared l, WithAssign l) => TH.Name -> Stmt l -> Stmt l
 addVar n = SLet VarMut n (VExp $ TH.VarE 'CP.undefined)
 
-previousInputs :: IsDesugared l => Prog l -> Prog l
+previousInputs :: (IsDesugared l, WithAssign l) => Prog l -> Prog l
 previousInputs prog 
     | length pvars > 0 = prog { progBody = flip (foldr addVar) (map fst pvars) $ updateYieldsStmt (map (\(n, n') -> SAssign n (TH.VarE n')) pvars) $ progBody prog }
     | otherwise = prog

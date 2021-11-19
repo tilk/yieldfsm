@@ -24,12 +24,12 @@ data LVData = LVData {
 
 $(makeLenses ''LVData)
 
-makeLocalVars :: (IsDesugared l, MonadRefresh m) => Prog l -> m (Prog l)
+makeLocalVars :: (IsDesugared l, WithAssign l, MonadRefresh m) => Prog l -> m (Prog l)
 makeLocalVars prog = do
     s' <- flip runReaderT (LVData False (returningFuns $ progBody prog) [] [] M.empty) $ makeLocalVarsStmt $ progBody prog
     return $ prog { progBody = s' }
 
-makeLocalVarsStmt :: (IsDesugared l, MonadRefresh m, MonadReader LVData m) => Stmt l -> m (Stmt l)
+makeLocalVarsStmt :: (IsDesugared l, WithAssign l, MonadRefresh m, MonadReader LVData m) => Stmt l -> m (Stmt l)
 makeLocalVarsStmt SNop = return SNop
 makeLocalVarsStmt (SYield e) = return $ SYield e
 makeLocalVarsStmt (SBlock ss) = SBlock <$> mapM makeLocalVarsStmt ss
@@ -69,7 +69,7 @@ makeLocalVarsVStmtRet (VCall f e) = do
     mvs <- views lvDataFunVars $ fromJust . M.lookup f
     return $ VCall f $ tupE $ e:map TH.VarE mvs
 
-makeLocalVarsVStmt :: (IsDesugared l, MonadRefresh m, MonadReader LVData m) => VStmt -> (TH.Exp -> m (Stmt l)) -> m (Stmt l)
+makeLocalVarsVStmt :: (IsDesugared l, WithAssign l, MonadRefresh m, MonadReader LVData m) => VStmt -> (TH.Exp -> m (Stmt l)) -> m (Stmt l)
 makeLocalVarsVStmt (VExp e) c = c e
 makeLocalVarsVStmt (VCall f e) c = do
     n <- makeName "rt"

@@ -7,20 +7,23 @@ import Prelude
 import GHC.TypeLits
 
 type Lvl = Nat
-type LvlSugared = 2
-type LvlFull = 1
+type LvlSugared = 3
+type LvlFull = 2
+type LvlLifted = 1
 type LvlLowest = 0
 
-type HasLoops l = LvlSugared <=? l
-type WithLoops l = HasLoops l ~ 'True
-type NoLoops l = HasLoops l ~ 'False
+type WithLoops l = LvlSugared <= l
+type NoLoops l = (LvlSugared <=? l) ~ 'False
 
-type HasFun l = LvlFull <=? l
-type WithFun l = HasFun l ~ 'True
-type NoFun l = HasFun l ~ 'False
+type WithFun l = LvlFull <= l
+type NoFun l = (LvlFull <=? l) ~ 'False
+
+type WithAssign l = LvlLifted <= l
+type WithNop l = LvlLifted <= l
+type NoAssign l = (LvlLifted <=? l) ~ 'False
 
 type IsDesugared l = NoLoops l
-type IsLifted l = (IsDesugared l, NoFun l)
+type IsLifted l = (NoFun l, IsDesugared l)
 
 type FunMap l = M.Map TH.Name (TH.Pat, Stmt l)
 
@@ -46,13 +49,13 @@ data Stmt :: Lvl -> Type where
     SBreak  :: WithLoops l => BrkType -> Stmt l
     SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
-    SAssign :: TH.Name -> TH.Exp -> Stmt l
+    SAssign :: WithAssign l => TH.Name -> TH.Exp -> Stmt l
     SYield  :: TH.Exp -> Stmt l
     SRet    :: VStmt -> Stmt l
     SBlock  :: [Stmt l] -> Stmt l
     SIf     :: TH.Exp -> Stmt l -> Stmt l -> Stmt l
     SCase   :: TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
-    SNop    :: Stmt l
+    SNop    :: WithNop l => Stmt l
 
 deriving instance Show (Stmt l)
 deriving instance Eq (Stmt l)
@@ -76,7 +79,7 @@ data NProg l = NProg {
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving (Show, Eq)
 
-sBlockS :: [Stmt l] -> Stmt l
+sBlockS :: WithNop l => [Stmt l] -> Stmt l
 sBlockS [] = SNop
 sBlockS [s] = s
 sBlockS ss = SBlock ss

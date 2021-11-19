@@ -19,10 +19,10 @@ callGraph :: IsDesugared l => Stmt l -> CG
 callGraph s = callGraphStmt (TH.mkName "") s
 
 callGraphFlat :: IsDesugared l => FunMap l -> CG
-callGraphFlat fs = callGraphFunMap (TH.mkName "") fs SNop
+callGraphFlat fs = callGraphFunMap fs
 
-callGraphFunMap :: IsDesugared l => TH.Name -> FunMap l -> Stmt l -> CG
-callGraphFunMap n fs s = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s') `mplus` callGraphStmt n s
+callGraphFunMap :: IsDesugared l => FunMap l -> CG
+callGraphFunMap fs = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s')
 
 callGraphStmt :: IsDesugared l => TH.Name -> Stmt l -> CG
 callGraphStmt _ SNop = mzero
@@ -33,7 +33,7 @@ callGraphStmt n (SRet vs) = callGraphVStmt n True vs
 callGraphStmt n (SBlock ss) = callGraphStmt n =<< ss
 callGraphStmt n (SIf _ st sf) = callGraphStmt n st `mplus` callGraphStmt n sf
 callGraphStmt n (SCase _ cs) = callGraphStmt n =<< map snd cs
-callGraphStmt n (SFun fs s) = callGraphFunMap n fs s
+callGraphStmt n (SFun fs s) = callGraphFunMap fs `mplus` callGraphStmt n s
 
 callGraphVStmt :: TH.Name -> Bool -> VStmt -> CG
 callGraphVStmt _ _ (VExp _) = mzero
