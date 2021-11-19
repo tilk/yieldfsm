@@ -67,6 +67,7 @@ simplifyCaseStmt m   (SCase e cs) = simplifyCaseDo m e cs
 simplifyCaseStmt _ e@(SRet _) = e
 simplifyCaseStmt _ e@(SAssign _ _) = e
 simplifyCaseStmt _ e@(SYield _) = e
+simplifyCaseStmt m   (SYieldT e s) = SYieldT e (simplifyCaseStmt m s)
 simplifyCaseStmt m   (SFun fs s) = SFun (simplifyCaseFunMap m fs) (simplifyCaseStmt m s)
 simplifyCaseStmt m   (SBlock ss) = SBlock $ map (simplifyCaseStmt m) ss
 simplifyCaseStmt m   (SIf e st sf) = SIf e (simplifyCaseStmt m st) (simplifyCaseStmt m sf)
@@ -96,6 +97,7 @@ hasAssigns n (SCase _ cs) = any (hasAssigns n . snd) cs
 hasAssigns _ (SRet _) = False
 hasAssigns n (SBlock ss) = any (hasAssigns n) ss
 hasAssigns _ (SYield _) = False
+hasAssigns n (SYieldT _ s) = hasAssigns n s
 hasAssigns n (SAssign n' _) = n == n'
 hasAssigns n (SFun fs s) = hasAssigns n s || any (\(p, s') -> not (n `S.member` patBound (freeVarsPat p)) && hasAssigns n s') fs
 hasAssigns _ SNop = False

@@ -21,15 +21,13 @@ data REData l = REData {
 
 $(makeLenses ''REData)
 
-removeEpsilonStmt :: (IsLifted l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
+removeEpsilonStmt :: (IsLowered l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
                      Stmt l -> f (Stmt l)
-removeEpsilonStmt s@SNop = return s
-removeEpsilonStmt s@(SYield _) = return s
 removeEpsilonStmt   (SIf e st sf) = SIf e <$> removeEpsilonStmt st <*> removeEpsilonStmt sf
 removeEpsilonStmt   (SLet t ln vs s) = SLet t ln vs <$> removeEpsilonStmt s
 removeEpsilonStmt   (SCase e cs) = SCase e <$> mapM cf cs where
     cf (p, s) = (p,) <$> removeEpsilonStmt s
-removeEpsilonStmt   (SBlock [SYield e, s]) = (\s' -> SBlock [SYield e, s']) <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
+removeEpsilonStmt   (SYieldT e s) = SYieldT e <$> locally reDataEmitted (const True) (removeEpsilonStmt s)
 removeEpsilonStmt s@(SRet (VCall f e)) = do
     (p, s') <- views reDataFunMap $ fromJust . M.lookup f
     em <- view reDataEmitted
@@ -41,7 +39,7 @@ removeEpsilonStmt s@(SRet (VCall f e)) = do
         SCase e <$> (return . (p',) <$> removeEpsilonStmt (rename su s'))
 removeEpsilonStmt s = error $ "removeEpsilonStmt statement not in tree form: " ++ show s
 
-removeEpsilonFrom :: (IsLifted l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
+removeEpsilonFrom :: (IsLowered l, MonadRefresh f, MonadReader (REData l) f, MonadState (M.Map TH.Name (TH.Pat, Stmt l)) f) =>
                      TH.Name -> f ()
 removeEpsilonFrom f = do
     (p, s) <- views reDataFunMap $ fromJust . M.lookup f
@@ -51,7 +49,7 @@ removeEpsilonFrom f = do
         s' <- locally reDataEmitted (const False) $ removeEpsilonStmt s
         modify $ M.insert f (p, s')
 
-removeEpsilon :: (IsLifted l, MonadRefresh m) => NProg l -> m (NProg l)
+removeEpsilon :: (IsLowered l, MonadRefresh m) => NProg l -> m (NProg l)
 removeEpsilon prog = do
     fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) (boundVars $ nProgInputs prog) False) $ removeEpsilonFrom (nProgInit prog)
     return $ prog { nProgFuns = fs' }

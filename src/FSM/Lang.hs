@@ -19,11 +19,14 @@ type WithFun l = LvlFull <= l
 type NoFun l = (LvlFull <=? l) ~ 'False
 
 type WithAssign l = LvlLifted <= l
-type WithNop l = LvlLifted <= l
 type NoAssign l = (LvlLifted <=? l) ~ 'False
+
+type WithBlock l = LvlLifted <= l
+type NoBlock l = (LvlLifted <=? l) ~ 'False
 
 type IsDesugared l = NoLoops l
 type IsLifted l = (NoFun l, IsDesugared l)
+type IsLowered l = (NoBlock l, IsLifted l)
 
 type FunMap l = M.Map TH.Name (TH.Pat, Stmt l)
 
@@ -50,12 +53,13 @@ data Stmt :: Lvl -> Type where
     SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
     SAssign :: WithAssign l => TH.Name -> TH.Exp -> Stmt l
-    SYield  :: TH.Exp -> Stmt l
+    SYield  :: WithBlock l => TH.Exp -> Stmt l
+    SYieldT :: NoBlock l => TH.Exp -> Stmt l -> Stmt l
     SRet    :: VStmt -> Stmt l
-    SBlock  :: [Stmt l] -> Stmt l
+    SBlock  :: WithBlock l => [Stmt l] -> Stmt l
     SIf     :: TH.Exp -> Stmt l -> Stmt l -> Stmt l
     SCase   :: TH.Exp -> [(TH.Pat, Stmt l)] -> Stmt l
-    SNop    :: WithNop l => Stmt l
+    SNop    :: WithBlock l => Stmt l
 
 deriving instance Show (Stmt l)
 deriving instance Eq (Stmt l)
@@ -79,7 +83,7 @@ data NProg l = NProg {
     nProgConts :: M.Map TH.Name (M.Map TH.Name [TH.Name])
 } deriving (Show, Eq)
 
-sBlockS :: WithNop l => [Stmt l] -> Stmt l
+sBlockS :: WithBlock l => [Stmt l] -> Stmt l
 sBlockS [] = SNop
 sBlockS [s] = s
 sBlockS ss = SBlock ss
@@ -92,9 +96,8 @@ tupP :: [TH.Pat] -> TH.Pat
 tupP [x] = x
 tupP xs = TH.TupP xs
 
-emittingStmt :: IsLifted l => Stmt l -> Bool
-emittingStmt (SBlock [SYield _, _]) = True
-emittingStmt SNop = False
+emittingStmt :: IsLowered l => Stmt l -> Bool
+emittingStmt (SYieldT _ _) = True
 emittingStmt (SRet _) = False
 emittingStmt (SIf _ st sf) = emittingStmt st || emittingStmt sf
 emittingStmt (SCase _ cs) = any (emittingStmt . snd) cs

@@ -26,7 +26,7 @@ sLet k n vs s = SLet k n <$> vs <*> s
 sAssign :: WithAssign l => TH.Name -> TH.ExpQ -> StmtQ l
 sAssign n e = SAssign n <$> e
 
-sYield :: TH.ExpQ -> StmtQ l
+sYield :: WithBlock l => TH.ExpQ -> StmtQ l
 sYield e = SYield <$> e
 
 sRet :: VStmtQ -> StmtQ l
@@ -35,7 +35,7 @@ sRet vs = SRet <$> vs
 sFun :: WithFun l => FunMapQ l -> StmtQ l -> StmtQ l
 sFun fs s = SFun <$> sequence (M.map psequence fs) <*> s
 
-sBlock :: [StmtQ l] -> StmtQ l
+sBlock :: WithBlock l => [StmtQ l] -> StmtQ l
 sBlock ss = SBlock <$> sequence ss
 
 sIf :: TH.ExpQ -> StmtQ l -> StmtQ l -> StmtQ l
@@ -44,7 +44,7 @@ sIf e st sf = SIf <$> e <*> st <*> sf
 sCase :: TH.ExpQ -> [(TH.PatQ, StmtQ l)] -> StmtQ l
 sCase e cs = SCase <$> e <*> sequence (map psequence cs)
 
-sNop :: WithNop l => StmtQ l
+sNop :: WithBlock l => StmtQ l
 sNop = return SNop
 
 

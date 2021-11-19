@@ -27,6 +27,7 @@ callGraphFunMap fs = (M.toList fs >>= \(n', (_, s')) -> callGraphStmt n' s')
 callGraphStmt :: IsDesugared l => TH.Name -> Stmt l -> CG
 callGraphStmt _ SNop = mzero
 callGraphStmt _ (SYield _) = mzero
+callGraphStmt n (SYieldT _ s) = callGraphStmt n s
 callGraphStmt n (SLet _ _ vs s) = callGraphVStmt n False vs `mplus` callGraphStmt n s
 callGraphStmt _ (SAssign _ _) = mzero
 callGraphStmt n (SRet vs) = callGraphVStmt n True vs

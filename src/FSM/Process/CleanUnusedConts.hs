@@ -112,6 +112,7 @@ instance IsDesugared l => CleanConts (Stmt l) where
     cleanConts ns (SLet t n vs s) = SLet t n (cleanConts ns vs) (cleanConts ns s)
     cleanConts ns (SAssign n vs) = SAssign n (cleanConts ns vs)
     cleanConts ns (SYield e) = SYield (cleanConts ns e)
+    cleanConts ns (SYieldT e s) = SYieldT (cleanConts ns e) (cleanConts ns s)
     cleanConts ns (SRet vs) = SRet (cleanConts ns vs)
     cleanConts ns (SFun fs s) = SFun (cleanContsFunMap ns fs) (cleanConts ns s)
     cleanConts ns (SBlock ss) = SBlock (cleanConts ns ss)

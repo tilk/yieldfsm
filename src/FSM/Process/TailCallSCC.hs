@@ -14,6 +14,7 @@ funsStmt :: IsDesugared l => Stmt l -> S.Set TH.Name
 funsStmt (SLet _ _ _ s) = funsStmt s
 funsStmt (SAssign _ _) = S.empty
 funsStmt (SYield _) = S.empty
+funsStmt (SYieldT _ s) = funsStmt s
 funsStmt (SRet _) = S.empty
 funsStmt (SFun fs s) = funsStmt s `S.union` S.unions (map (funsStmt . snd . snd) $ M.toList fs) `S.union` M.keysSet fs
 funsStmt (SBlock ss) = S.unions $ map funsStmt ss

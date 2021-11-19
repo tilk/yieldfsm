@@ -27,6 +27,7 @@ testFreshnessStmt   (SLet t n vs s) = do
     SLet t n vs <$> testFreshnessStmt s
 testFreshnessStmt s@(SAssign _ _) = return s
 testFreshnessStmt s@(SYield _) = return s
+testFreshnessStmt   (SYieldT e s) = SYieldT e <$> testFreshnessStmt s
 testFreshnessStmt s@(SRet _) = return s
 testFreshnessStmt   (SFun fs s) = SFun <$> mapM testFreshnessCase fs <*> testFreshnessStmt s
 testFreshnessStmt   (SBlock ss) = SBlock <$> mapM testFreshnessStmt ss

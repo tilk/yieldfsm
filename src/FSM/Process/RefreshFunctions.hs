@@ -16,6 +16,7 @@ refreshFunctionsVStmt m (VCall f e) = return $ VCall (fromJust $ M.lookup f m) e
 refreshFunctionsStmt :: (IsDesugared l, MonadRefresh m) => M.Map TH.Name TH.Name -> Stmt l -> m (Stmt l)
 refreshFunctionsStmt _ SNop = return SNop
 refreshFunctionsStmt _ (SYield e) = return $ SYield e
+refreshFunctionsStmt m (SYieldT e s) = SYieldT e <$> refreshFunctionsStmt m s
 refreshFunctionsStmt m (SRet vs) = SRet <$> refreshFunctionsVStmt m vs
 refreshFunctionsStmt _ (SAssign n e) = return $ SAssign n e
 refreshFunctionsStmt m (SBlock ss) = SBlock <$> mapM (refreshFunctionsStmt m) ss

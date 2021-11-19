@@ -10,10 +10,15 @@ import Control.Arrow
 
 stmt2dtree :: Maybe TH.Exp -> Stmt LvlLowest -> DecisionTree Transition
 stmt2dtree me       (SIf e s1 s2) = DTIf e (stmt2dtree me s1) (stmt2dtree me s2)
-stmt2dtree Nothing  (SBlock [SYield e, s]) = stmt2dtree (Just e) s
+stmt2dtree Nothing  (SYieldT e s) = stmt2dtree (Just e) s
 stmt2dtree me       (SLet VarLet n (VExp e) s) = DTLet (TH.VarP n) e (stmt2dtree me s)
 stmt2dtree me       (SCase e cs) = DTCase e (map (id *** stmt2dtree me) cs)
 stmt2dtree (Just e) (SRet (VCall n ec)) = DTLeaf $ Transition e n ec
+stmt2dtree _        (SLet VarLet _ (VCall _ _) _) = error "Not in final form"
+stmt2dtree _        (SLet VarMut _ _ _) = error "Not in final form"
+stmt2dtree _        (SRet (VExp _)) = error "Not in final form"
+stmt2dtree Nothing  (SRet (VCall _ _)) = error "Not in final form: transition without yield"
+stmt2dtree (Just _) (SYieldT _ _) = error "Not in final form: two yields in transition"
 
 fun2state :: (TH.Pat, Stmt LvlLowest) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree Nothing s)

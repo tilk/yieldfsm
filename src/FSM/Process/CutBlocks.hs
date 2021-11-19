@@ -36,7 +36,7 @@ cutBlocksStmt (SBlock (s:ss)) s' = do
 cutBlocksStmt (SYield e) s' | not (emittingStmt s') = do -- TODO handling of inputs
     ivs <- asks cbDataInputVars
     if S.null $ freeVars s' `S.intersection` ivs
-    then return $ SBlock [SYield e, s']
+    then return $ SYieldT e s'
     else do
         s'' <- makeCont s'
         cutBlocksStmt (SYield e) s''

@@ -88,8 +88,9 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
                             | otherwise -> error "should not happen"
         cfn <- view tcDataCont
         return $ SRet $ VCall f $ tupE [e, inj $ TH.VarE cfn]
-makeTailCallsStmt   (SBlock [SYield e,s]) = (\s' -> SBlock [SYield e, s']) <$> makeTailCallsStmt s
-makeTailCallsStmt s = error $ "makeTailCallsStmt statement not in tree form: " ++ show s
+makeTailCallsStmt   (SYieldT e s) = SYieldT e <$> makeTailCallsStmt s
+makeTailCallsStmt   (SLet VarLet _ (VCall _ _) _) = error "Not in tree form"
+makeTailCallsStmt   (SLet VarMut _ _ _) = error "Not in tree form"
 
 makeTailCalls :: MonadRefresh m => NProg LvlLowest -> m (NProg LvlLowest)
 makeTailCalls prog = evalUniqueT $ do

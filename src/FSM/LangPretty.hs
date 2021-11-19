@@ -22,6 +22,7 @@ prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> TH.ppr n <+> prettyK
     kw VarMut = "var"
 prettyStmt (SAssign n e) = TH.ppr n <+> prettyKeyword "=" <+> TH.ppr e
 prettyStmt (SYield e) = prettyKeyword "yield" <+> TH.ppr e
+prettyStmt (SYieldT e s) = vcat [prettyKeyword "yield" <+> TH.ppr e, prettyStmt s]
 prettyStmt (SRet vs) = prettyKeyword "ret" <+> prettyVStmt vs
 prettyStmt (SFun fs s) = prettyFun fs s
 prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> TH.ppr e <> prettyKeyword ":", nest 4 (prettyStmt st), prettyKeyword "else:", nest 4 (prettyStmt sf)]
