@@ -2,6 +2,7 @@ module FSM.Process.ReturningFuns(returningFuns, returningFunsFlat) where
 
 import FSM.Lang
 import Prelude
+import Control.Applicative(liftA2)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
@@ -40,14 +41,17 @@ returningFunsFlat :: IsDesugared l => FunMap l -> S.Set TH.Name
 returningFunsFlat fs = returningFunsH (callGraphFlat fs) (directRetFunMap fs)
 
 isReturningStmt :: IsDesugared l => Stmt l -> Bool
-isReturningStmt SNop = False
-isReturningStmt (SYield _) = False
-isReturningStmt (SLet _ _ _ s) = isReturningStmt s
-isReturningStmt (SAssign _ _) = False
-isReturningStmt (SBlock ss) = or $ isReturningStmt <$> ss
-isReturningStmt (SIf _ st sf) = isReturningStmt st || isReturningStmt sf
-isReturningStmt (SCase _ cs) = or $ isReturningStmt <$> map snd cs
-isReturningStmt (SRet (VExp _)) = True
-isReturningStmt (SRet (VCall _ _)) = False
-isReturningStmt (SFun _ s) = isReturningStmt s
+isReturningStmt s = isReturningStmtM s True
+
+isReturningStmtM :: IsDesugared l => Stmt l -> Bool -> Bool
+isReturningStmtM SNop = id
+isReturningStmtM (SYield _) = id
+isReturningStmtM (SLet _ _ _ s) = isReturningStmtM s
+isReturningStmtM (SAssign _ _) = id
+isReturningStmtM (SBlock ss) = foldr (.) id $ isReturningStmtM <$> ss
+isReturningStmtM (SIf _ st sf) = (||) <$> isReturningStmtM st <*> isReturningStmtM sf
+isReturningStmtM (SCase _ cs) = foldr1 (liftA2 (||)) $ isReturningStmtM <$> map snd cs
+isReturningStmtM (SRet (VExp _)) = const True
+isReturningStmtM (SRet (VCall _ _)) = const False
+isReturningStmtM (SFun _ s) = isReturningStmtM s
 

@@ -32,6 +32,7 @@ main = defaultMain $ testGroup "." [
     testOscillator @CP.System "oscilCall2" oscilCall2FSM,
     testOscillator @CP.System "oscilCall3" oscilCall3FSM,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
+    testOscillator @CP.System "oscilLiftRets" oscilLiftRetsFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
     testSlowCounter @CP.System "countSlow" countSlowFSM,
@@ -103,6 +104,20 @@ fun f ():
         let x = True
         ret call g (not y)
     ret call g True
+ret call f ()
+|]
+
+[fsm|oscilLiftRetsFSM :: (CP.HiddenClockResetEnable dom)
+                      => CP.Signal dom Bool
+fun f ():
+    let x = False
+    fun g y:
+        yield x == y
+        let x = True
+        ret call g (not y)
+        ret ()
+    ret call g True
+    ret ()
 ret call f ()
 |]
 
