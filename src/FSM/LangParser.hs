@@ -12,7 +12,6 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Applicative hiding (many, some)
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Writer
 import Control.Lens hiding (noneOf)
 import Prelude
 import Data.Void
@@ -27,26 +26,12 @@ data PRData = PRData {
 prData :: PRData
 prData = PRData S.empty M.empty
 
-data PWData = PWData {
-    _pwDataRet :: Bool
-}
-
-pwData :: PWData
-pwData = PWData False
-
 $(makeLenses ''PRData)
-$(makeLenses ''PWData)
 
 boundVarsEnv :: FreeVarsPat a => a -> M.Map TH.Name VarKind
 boundVarsEnv = M.fromSet (const VarLet) . boundVars
 
-instance Semigroup PWData where
-    (PWData r1) <> (PWData r2) = PWData (r1 || r2)
-
-instance Monoid PWData where
-    mempty = pwData
-
-type Parser = ReaderT PRData (WriterT PWData (ParsecT Void String TH.Q))
+type Parser = ReaderT PRData (ParsecT Void String TH.Q)
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -67,7 +52,7 @@ ident :: Parser () -> Parser String
 ident sc' = L.lexeme sc' $ (:) <$> letterChar <*> many alphaNumChar
 
 qlift :: TH.Q a -> Parser a
-qlift = lift . lift . lift
+qlift = lift . lift
 
 withoutPrims :: TH.Name -> TH.Name
 withoutPrims = TH.mkName . reverse . dropWhile (== '\'') . reverse . TH.nameBase
@@ -176,9 +161,7 @@ parseEmit = do
     vStmtToExp SYield vs
 
 parseRet :: Parser (Stmt 'LvlSugared)
-parseRet = do
-    scribe pwDataRet True
-    SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
+parseRet = SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
 
 parseIf :: Parser (Stmt 'LvlSugared)
 parseIf = do
@@ -197,8 +180,8 @@ parseFun = do
 
 parseFunBody :: TH.Name -> TH.Pat -> Parser (TH.Name, (TH.Pat, Stmt 'LvlSugared))
 parseFunBody n p = do
-    (s, r) <- locally prDataVars (M.union $ boundVarsEnv p) $ listening pwDataRet $ parseStmt
-    return (n, (p, if r then s else SBlock [s, SRet $ VExp $ TH.TupE []]))
+    s <- locally prDataVars (M.union $ boundVarsEnv p) $ parseStmt
+    return (n, (p, SBlock [s, SRet $ VExp $ TH.VarE 'undefined]))
 
 parseBlock :: Parser (Stmt 'LvlSugared)
 parseBlock = do
@@ -212,8 +195,7 @@ parseForever = do
     return $ SLoop LoopForever $ SBlock ss
 
 parseLoopBody :: Pos -> Parser [Stmt 'LvlSugared]
-parseLoopBody lvl = censoring pwDataRet (const False) $
-    many (try $ L.indentGuard scn GT lvl *> parseBasicStmt) -- TODO: ret handling
+parseLoopBody lvl = many (try $ L.indentGuard scn GT lvl *> parseBasicStmt)
 
 parseRepeat :: Parser (Stmt 'LvlSugared)
 parseRepeat = do
@@ -305,5 +287,5 @@ parseProg = do
     return $ Prog i t ps is s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog 'LvlSugared))
-runParseProg s = fmap fst <$> (runParserT (runWriterT (runReaderT parseProg prData)) "" s)
+runParseProg s = runParserT (runReaderT parseProg prData) "" s
 
