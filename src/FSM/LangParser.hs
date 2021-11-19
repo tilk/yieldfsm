@@ -49,7 +49,7 @@ symbolic :: Parser () -> Char -> Parser Char
 symbolic sc' = L.lexeme sc' . char
 
 ident :: Parser () -> Parser String
-ident sc' = L.lexeme sc' $ (:) <$> letterChar <*> many alphaNumChar
+ident sc' = L.lexeme sc' $ (:) <$> (letterChar <|> char '_') <*> many (alphaNumChar <|> char '_')
 
 qlift :: TH.Q a -> Parser a
 qlift = lift . lift
