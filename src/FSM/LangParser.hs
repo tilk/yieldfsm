@@ -108,17 +108,23 @@ stringToHsPat s = HM.toPat <$> parseHsPat s
 stringToHsType :: String -> Either String TH.Type
 stringToHsType s = HM.toType <$> parseHsType s
 
-parseHsFoldGen :: FreeVars b => (Parser () -> Parser a) -> (Parser () -> Parser (b -> c)) -> (a -> Either String b) -> Parser c
-parseHsFoldGen rest pfx p = try (lookAhead (pfx scn)) *> L.lineFold scn (\sc' ->
-    (($) <$> pfx sc' <*> (e2m =<< p <$> rest sc')) <* sc)
+parseHsFoldGen :: FreeVars b => (Parser () -> Parser a) -> Parser b -> (Parser () -> Parser (b -> c)) -> (a -> Either String b) -> Parser c
+parseHsFoldGen rest alt pfx p = try (lookAhead (pfx scn)) *> L.lineFold scn (\sc' ->
+    (($) <$> pfx sc' <*> ((e2m =<< p <$> rest sc') <|> alt)) <* sc)
 
-parseHsFold :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
-parseHsFold = parseHsFoldGen (\sc' -> unwords <$> some (noneOf "\r\n") `sepBy1` try sc')
+parseHsFoldAlt :: FreeVars a => Parser a -> (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFoldAlt = parseHsFoldGen (\sc' -> unwords <$> some (noneOf "\r\n") `sepBy1` try sc')
 
-parseHsFoldColon :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
-parseHsFoldColon = parseHsFoldGen (\sc' -> unwords <$> some mysingle `sepBy1` try sc' <* single ':')
+parseHsFoldColonAlt :: FreeVars a => Parser a -> (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFoldColonAlt = parseHsFoldGen (\sc' -> unwords <$> some mysingle `sepBy1` try sc' <* single ':')
     where
     mysingle = try $ noneOf "\r\n" >>= \c -> return c <* (if c == ':' then notFollowedBy newline else return ())
+
+parseHsFold :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFold = parseHsFoldAlt empty
+
+parseHsFoldColon :: FreeVars a => (Parser () -> Parser (a -> b)) -> (String -> Either String a) -> Parser b
+parseHsFoldColon = parseHsFoldColonAlt empty
 
 parseHsFoldSymbol :: FreeVars a => String -> (String -> Either String a) -> Parser a
 parseHsFoldSymbol s = parseHsFold (\sc' -> L.symbol sc' s >> return id)
@@ -155,10 +161,14 @@ parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseEmit :: Parser (Stmt LvlSugared)
-parseEmit = do
+parseNameList :: Parser () -> Parser [TH.Name]
+parseNameList sc' = symbolic sc' '<' *> many (parseName sc') <* symbolic sc' '>'
+                <|> return []
+
+parseYield :: Parser (Stmt LvlSugared)
+parseYield = do
     vs <- parseVStmt (\sc' -> L.symbol sc' "yield" >> return id)
-    vStmtToExp SYield vs
+    vStmtToExp (SYieldO []) vs
 
 parseRet :: Parser (Stmt LvlSugared)
 parseRet = SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
@@ -247,7 +257,7 @@ parseCall = (\vs -> SLet VarLet (TH.mkName "_") vs SNop) <$> parseHsFold (\sc' -
 parseBasicStmt :: Parser (Stmt LvlSugared)
 parseBasicStmt = parseVar
              <|> parseLet
-             <|> parseEmit
+             <|> parseYield
              <|> parseRet
              <|> parseIf
              <|> parseCase
@@ -284,7 +294,7 @@ parseProg = do
     is <- (try $ L.nonIndented scn $ Just <$> parseHsFoldSymbol "input" stringToHsPat) <|> return Nothing
     s <- locally prDataInputs (S.union $ boundVars is) $ locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ L.nonIndented scn $ parseBasicStmt
     scn *> eof
-    return $ Prog i t ps is s
+    return $ Prog i t ps is M.empty s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog LvlSugared))
 runParseProg s = runParserT (runReaderT parseProg prData) "" s

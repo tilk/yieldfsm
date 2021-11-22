@@ -51,7 +51,7 @@ desugarLoopsLoop f (LoopWhile IterDoWhile wt e) s = do
     qlift $ sFun (M.singleton f (TH.tupP [], sBlock $ [return s, wtIfQ wt e (sRet $ vCall f $ TH.tupE []) (sRet $ vExp $ TH.tupE [])]))
                  (sLet VarLet (TH.mkName "_") (vCall f $ TH.tupE []) sNop)
 
-desugarLoopsStmt :: (Qlift m, MonadRefresh m, MonadReader RData m) => Stmt LvlSugared -> m (Stmt LvlFull)
+desugarLoopsStmt :: (Qlift m, MonadRefresh m, MonadReader RData m) => Stmt LvlLoops -> m (Stmt LvlFull)
 desugarLoopsStmt (SLoop lt s) = do
     f <- makeName $ ltName lt
     s' <- locally rDataLoop (const $ Just f) $ desugarLoopsStmt s
@@ -77,7 +77,7 @@ desugarLoopsStmt (SIf e st sf) = SIf e <$> desugarLoopsStmt st <*> desugarLoopsS
 desugarLoopsStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> desugarLoopsStmt s) cs
 desugarLoopsStmt (SNop) = return SNop
 
-desugarLoops :: (Qlift m, MonadRefresh m) => Prog LvlSugared -> m (Prog LvlFull)
+desugarLoops :: (Qlift m, MonadRefresh m) => Prog LvlLoops -> m (Prog LvlFull)
 desugarLoops prog = do
     b <- flip runReaderT (RData Nothing) $ desugarLoopsStmt $ progBody prog
     return $ prog { progBody = b }

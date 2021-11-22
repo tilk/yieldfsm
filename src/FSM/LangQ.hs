@@ -26,7 +26,7 @@ sLet k n vs s = SLet k n <$> vs <*> s
 sAssign :: WithAssign l => TH.Name -> TH.ExpQ -> StmtQ l
 sAssign n e = SAssign n <$> e
 
-sYield :: WithBlock l => TH.ExpQ -> StmtQ l
+sYield :: (WithBlock l, NoOutputs l) => TH.ExpQ -> StmtQ l
 sYield e = SYield <$> e
 
 sRet :: VStmtQ -> StmtQ l

@@ -4,7 +4,8 @@ module FSM.LangProcess(
     makeTailCalls, deTailCall, previousInputs, flattenTuples,
     foldInit, refreshVars, simplifyCase, simplifyCaseN,
     cleanUnusedConstructors, cleanUnusedArgs, cleanUnusedConts,
-    argumentPropagation, integrateCase, testFreshness, desugarLoops
+    argumentPropagation, integrateCase, testFreshness, desugarLoops,
+    desugarOutputs
 ) where
 
 import FSM.Process.MakeTailCalls
@@ -26,4 +27,5 @@ import FSM.Process.ArgumentPropagation
 import FSM.Process.IntegrateCase
 import FSM.Process.TestFreshness
 import FSM.Process.DesugarLoops
+import FSM.Process.DesugarOutputs
 

@@ -7,24 +7,31 @@ import Prelude
 import GHC.TypeLits
 
 type Lvl = Nat
-type LvlSugared = 3
+type LvlSugared = 4
+type LvlLoops = 3
 type LvlFull = 2
 type LvlLifted = 1
 type LvlLowest = 0
 
-type WithLoops l = LvlSugared <= l
-type NoLoops l = (LvlSugared <=? l) ~ 'False
+type (a /<= b) = (a <=? b) ~ 'False
+
+type WithOutputs l = LvlSugared <= l
+type NoOutputs l = LvlSugared /<= l
+
+type WithLoops l = LvlLoops <= l
+type NoLoops l = LvlLoops /<= l
 
 type WithFun l = LvlFull <= l
-type NoFun l = (LvlFull <=? l) ~ 'False
+type NoFun l = LvlFull /<= l
 
 type WithAssign l = LvlLifted <= l
-type NoAssign l = (LvlLifted <=? l) ~ 'False
+type NoAssign l = LvlLifted /<= l
 
 type WithBlock l = LvlLifted <= l
-type NoBlock l = (LvlLifted <=? l) ~ 'False
+type NoBlock l = LvlLifted /<= l
 
-type IsDesugared l = NoLoops l
+type IsOneOutput l = NoOutputs l
+type IsDesugared l = (NoLoops l, IsOneOutput l)
 type IsLifted l = (NoFun l, IsDesugared l)
 type IsLowered l = (NoBlock l, IsLifted l)
 
@@ -53,7 +60,8 @@ data Stmt :: Lvl -> Type where
     SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
     SAssign :: WithAssign l => TH.Name -> TH.Exp -> Stmt l
-    SYield  :: WithBlock l => TH.Exp -> Stmt l
+    SYieldO :: WithOutputs l => [TH.Name] -> TH.Exp -> Stmt l
+    SYield  :: (WithBlock l, NoOutputs l) => TH.Exp -> Stmt l
     SYieldT :: NoBlock l => TH.Exp -> Stmt l -> Stmt l
     SRet    :: VStmt -> Stmt l
     SBlock  :: WithBlock l => [Stmt l] -> Stmt l
@@ -64,11 +72,16 @@ data Stmt :: Lvl -> Type where
 deriving instance Show (Stmt l)
 deriving instance Eq (Stmt l)
 
+data Output = Output {
+    outputDefault :: TH.Exp
+} deriving (Show, Eq)
+
 data Prog l = Prog {
     progName :: TH.Name,
     progType :: TH.Type,
     progParams :: [TH.Pat],
     progInputs :: Maybe TH.Pat,
+    progOutputs :: M.Map TH.Name Output,
     progBody :: Stmt l
 } deriving (Show, Eq)
 
