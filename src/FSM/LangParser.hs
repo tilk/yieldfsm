@@ -161,14 +161,17 @@ parseLet = do
     (lvl, i, v) <- parseVStmt (\sc' -> (,,) <$> L.indentLevel <*> (L.symbol sc' "let" *> parseName sc' <* symbolic sc' '='))
     locally prDataVars (M.insert i VarLet) $ SLet VarLet i v <$> (L.indentGuard scn EQ lvl *> parseStmt)
 
-parseNameList :: Parser () -> Parser [TH.Name]
-parseNameList sc' = symbolic sc' '<' *> many (parseName sc') <* symbolic sc' '>'
-                <|> return []
+parseNameList :: Parser () -> Parser (Maybe [TH.Name])
+parseNameList sc' = Just <$> (symbolic sc' '<' *> many (parseName sc') <* symbolic sc' '>')
+                <|> return Nothing
 
 parseYield :: Parser (Stmt LvlSugared)
 parseYield = do
-    vs <- parseVStmt (\sc' -> L.symbol sc' "yield" >> return id)
-    vStmtToExp (SYieldO []) vs
+    (ons, ovs) <- parseVStmtOpt (\sc' -> (,) <$> (L.symbol sc' "yield" *> parseNameList sc'))
+    case (ons, ovs) of
+        (Nothing, Nothing) -> return $ SYieldO [] $ tupE []
+        (Nothing, Just vs) -> vStmtToExp (SYieldO [TH.mkName "*default"]) vs
+        (Just ns, _) -> vStmtToExp (SYieldO ns) $ maybe (VExp $ tupE []) id ovs
 
 parseRet :: Parser (Stmt LvlSugared)
 parseRet = SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
@@ -283,6 +286,9 @@ parseStmt :: Parser (Stmt LvlSugared)
 parseStmt = do
     lvl <- L.indentLevel
     mkStmt <$> (some $ try (L.indentGuard scn EQ lvl >> notFollowedBy eof) *> parseBasicStmt)
+
+parseVStmtOpt :: (Parser () -> Parser (Maybe VStmt -> a)) -> Parser a
+parseVStmtOpt pfx = parseHsFoldAlt (return Nothing) (\sc' -> (.) <$> pfx sc' <*> (fmap . VCall <$> (L.symbol sc' "call" *> parseName sc') <|> return (fmap VExp))) (fmap Just . stringToHsExp)
 
 parseVStmt :: (Parser () -> Parser (VStmt -> a)) -> Parser a
 parseVStmt pfx = parseHsFold (\sc' -> (.) <$> pfx sc' <*> (VCall <$> (L.symbol sc' "call" *> parseName sc') <|> return VExp)) stringToHsExp
