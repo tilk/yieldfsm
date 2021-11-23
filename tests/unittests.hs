@@ -26,6 +26,7 @@ countSlowOpt n (True:xs) = n:f xs where
 main :: IO ()
 main = defaultMain $ testGroup "." [ 
     testOscillator @CP.System "oscilAssign" oscilAssignFSM,
+    testOscillator @CP.System "oscilOutput" oscilOutputFSM,
     testOscillator @CP.System "oscilVar" oscilVarFSM,
     testOscillator @CP.System "oscilVar2" oscilVar2FSM,
     testOscillator @CP.System "oscilCall" oscilCallFSM,
@@ -33,6 +34,8 @@ main = defaultMain $ testGroup "." [
     testOscillator @CP.System "oscilCall3" oscilCall3FSM,
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testOscillator @CP.System "oscilLiftRets" oscilLiftRetsFSM,
+    testOscillator2 @CP.System "oscil2Output" oscil2OutputFSM,
+    testOscillator2 @CP.System "oscil2OutputTpl" oscil2OutputTplFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
     testSlowCounter @CP.System "countSlow" countSlowFSM,
@@ -66,6 +69,8 @@ main = defaultMain $ testGroup "." [
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= take 100 (cycle [False, True])
+    testOscillator2 :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom (Bool, Bool)) -> TestTree
+    testOscillator2 name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= take 100 (cycle [(False, True), (True, False)])
     testCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Integer) -> TestTree
     testCounter name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= [(0 :: Integer)..99]
     testSlowCounter :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Integer) -> TestTree
@@ -128,6 +133,32 @@ forever:
     yield x
     x = not x
     yield x
+|]
+
+[fsm|oscilOutputFSM :: (CP.HiddenClockResetEnable dom)
+                    => CP.Signal dom Bool
+output default = False
+forever:
+    yield
+    yield True
+|]
+
+[fsm|oscil2OutputFSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom (Bool, Bool)
+output a = False
+output b = False
+forever:
+    yield<b> True
+    yield<a> True
+|]
+
+[fsm|oscil2OutputTplFSM :: (CP.HiddenClockResetEnable dom)
+                        => CP.Signal dom (Bool, Bool)
+output a
+output b
+forever:
+    yield<a,b> (False, True)
+    yield<b,a> (False, True)
 |]
 
 [fsm|oscilVarFSM :: (CP.HiddenClockResetEnable dom)

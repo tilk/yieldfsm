@@ -81,7 +81,7 @@ data Prog l = Prog {
     progType :: TH.Type,
     progParams :: [TH.Pat],
     progInputs :: Maybe TH.Pat,
-    progOutputs :: M.Map TH.Name Output,
+    progOutputs :: [(TH.Name, Output)],
     progBody :: Stmt l
 } deriving (Show, Eq)
 
