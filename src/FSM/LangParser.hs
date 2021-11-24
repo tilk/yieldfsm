@@ -176,6 +176,13 @@ parseYield = do
         (Nothing, Just vs) -> vStmtToExp (SYieldO [TH.mkName "default"]) vs
         (Just ns, _) -> vStmtToExp (SYieldO ns) $ maybe (VExp $ tupE []) id ovs
 
+parseOutputStmt :: Parser (Stmt LvlSugared)
+parseOutputStmt = do
+    (ons, vs) <- parseVStmt (\sc' -> (,) <$> (L.symbol sc' "output" *> parseNameList sc'))
+    case ons of
+        Nothing -> vStmtToExp (SOutput [TH.mkName "default"]) vs
+        Just ns -> vStmtToExp (SOutput ns) vs
+
 parseRet :: Parser (Stmt LvlSugared)
 parseRet = SRet <$> parseVStmt (\sc' -> L.symbol sc' "ret" >> return id)
 
@@ -264,6 +271,7 @@ parseBasicStmt :: Parser (Stmt LvlSugared)
 parseBasicStmt = parseVar
              <|> parseLet
              <|> parseYield
+             <|> parseOutputStmt
              <|> parseRet
              <|> parseIf
              <|> parseCase
