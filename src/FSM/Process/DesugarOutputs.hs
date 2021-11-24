@@ -3,7 +3,6 @@ module FSM.Process.DesugarOutputs(desugarOutputs) where
 
 import Prelude
 import FSM.Lang
-import FSM.LangQ
 import Control.Monad.Reader
 import Control.Lens
 import Control.Arrow
@@ -37,14 +36,20 @@ mkAssigns ns  (TH.TupE es)
     | otherwise = error "Invalid number of outputs in yield"
 mkAssigns _ _ = error "Invalid yield call"
 
+varNames :: MonadReader RData m => [TH.Name] -> m [TH.Name]
+varNames ns = (\nm -> map (fromJust . flip M.lookup nm) ns) <$> view rDataNames
+
 desugarOutputsStmt :: (Qlift m, MonadRefresh m, MonadReader RData m) => Stmt LvlSugared -> m (Stmt LvlLoops)
 desugarOutputsStmt (SLoop lt s) = SLoop lt <$> desugarOutputsStmt s
 desugarOutputsStmt (SBreak bt) = return $ SBreak bt
 desugarOutputsStmt (SFun fs s) = SFun <$> mapM (\(p, s') -> (p,) <$> desugarOutputsStmt s') fs <*> desugarOutputsStmt s
 desugarOutputsStmt (SLet t n vs s) = SLet t n vs <$> desugarOutputsStmt s
 desugarOutputsStmt (SAssign n e) = return $ SAssign n e
+desugarOutputsStmt (SOutput ns e) = do
+    ns' <- varNames ns
+    return $ sBlockS $ mkAssigns ns' e
 desugarOutputsStmt (SYieldO ns e) = do
-    ns' <- (\nm -> map (fromJust . flip M.lookup nm) ns) <$> view rDataNames
+    ns' <- varNames ns
     rds <- restoreDefaults
     os <- makeOutputs
     return $ sBlockS $ mkAssigns ns' e ++ SYield (tupE os) : rds

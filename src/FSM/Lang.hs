@@ -60,6 +60,7 @@ data Stmt :: Lvl -> Type where
     SFun    :: WithFun l => FunMap l -> Stmt l -> Stmt l
     SLet    :: VarKind -> TH.Name -> VStmt -> Stmt l -> Stmt l
     SAssign :: WithAssign l => TH.Name -> TH.Exp -> Stmt l
+    SOutput :: WithOutputs l => [TH.Name] -> TH.Exp -> Stmt l
     SYieldO :: WithOutputs l => [TH.Name] -> TH.Exp -> Stmt l
     SYield  :: (WithBlock l, NoOutputs l) => TH.Exp -> Stmt l
     SYieldT :: NoBlock l => TH.Exp -> Stmt l -> Stmt l

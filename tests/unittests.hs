@@ -27,6 +27,7 @@ main :: IO ()
 main = defaultMain $ testGroup "." [ 
     testOscillator @CP.System "oscilAssign" oscilAssignFSM,
     testOscillator @CP.System "oscilOutput" oscilOutputFSM,
+    testOscillator @CP.System "oscilOutput2" oscilOutput2FSM,
     testOscillator @CP.System "oscilVar" oscilVarFSM,
     testOscillator @CP.System "oscilVar2" oscilVar2FSM,
     testOscillator @CP.System "oscilCall" oscilCallFSM,
@@ -35,6 +36,7 @@ main = defaultMain $ testGroup "." [
     testOscillator @CP.System "oscilLift" oscilLiftFSM,
     testOscillator @CP.System "oscilLiftRets" oscilLiftRetsFSM,
     testOscillator2 @CP.System "oscil2Output" oscil2OutputFSM,
+    testOscillator2 @CP.System "oscil2Output2" oscil2Output2FSM,
     testOscillator2 @CP.System "oscil2OutputTpl" oscil2OutputTplFSM,
     testCounter @CP.System "count" countFSM,
     testCounter @CP.System "countLet" countLetFSM,
@@ -143,6 +145,15 @@ forever:
     yield True
 |]
 
+[fsm|oscilOutput2FSM :: (CP.HiddenClockResetEnable dom)
+                     => CP.Signal dom Bool
+output default = False
+forever:
+    yield
+    output True
+    yield
+|]
+
 [fsm|oscil2OutputFSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom (Bool, Bool)
 output a = False
@@ -150,6 +161,17 @@ output b = False
 forever:
     yield<b> True
     yield<a> True
+|]
+
+[fsm|oscil2Output2FSM :: (CP.HiddenClockResetEnable dom)
+                      => CP.Signal dom (Bool, Bool)
+output a = False
+output b = False
+forever:
+    output<b> True
+    yield
+    output<a> True
+    yield
 |]
 
 [fsm|oscil2OutputTplFSM :: (CP.HiddenClockResetEnable dom)
