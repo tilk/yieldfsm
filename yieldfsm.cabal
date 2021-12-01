@@ -173,8 +173,9 @@ test-suite test-library
   type: exitcode-stdio-1.0
   ghc-options: -threaded
   main-is: unittests.hs
---  other-modules:
---    Test
+  other-modules:
+    IntersectionModel
+    IntersectionTest
   build-depends:
     yieldfsm,
     QuickCheck,

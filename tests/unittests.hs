@@ -12,6 +12,8 @@ import qualified Test.Tasty.HUnit as TU
 
 import FSM
 
+import IntersectionTest
+
 dup :: [a] -> [a]
 dup [] = []
 dup (x:xs) = x:x:dup xs
@@ -67,7 +69,8 @@ main = defaultMain $ testGroup "." [
     testCounterUpDown @CP.System "countUpDownWhileCall" countUpDownWhileCallFSM,
     testCounterUpDown @CP.System "countUpDownWhileCall1" countUpDownWhileCall1FSM,
     testCounterUpDownSlow @CP.System "countUpDownWhileSlow" countUpDownWhileSlowFSM,
-    testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM]
+    testCounterUpDownSlow @CP.System "countUpDownWhileSlowCall" countUpDownWhileSlowCallFSM,
+    testIntersection @CP.System "intersectionFSM" intersectionFSM]
     where
     testOscillator :: CP.KnownDomain dom => String -> (CP.HiddenClockResetEnable dom => CP.Signal dom Bool) -> TestTree
     testOscillator name machine = TU.testCase name $ tail (CP.sampleN 101 machine) TU.@?= take 100 (cycle [False, True])
