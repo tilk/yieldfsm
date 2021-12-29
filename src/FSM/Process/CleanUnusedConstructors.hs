@@ -140,17 +140,18 @@ removeConstructorsStmt _   s@(SRet _) = s
 removeConstructorsStmt con   (SFun fs s) = SFun (removeConstructorsFunMap con fs) (removeConstructorsStmt con s)
 removeConstructorsStmt con   (SBlock ss) = SBlock $ map (removeConstructorsStmt con) ss
 removeConstructorsStmt con   (SIf e st sf) = SIf e (removeConstructorsStmt con st) (removeConstructorsStmt con sf)
-removeConstructorsStmt con   (SCase e cs) = SCase e $ map (id *** removeConstructorsStmt con) . filter (S.null . (`S.difference` con) . patConstructors . fst) $ cs
+removeConstructorsStmt con   (SCase e cs) = SCase e $ map (id *** removeConstructorsStmt con) . filter (S.null . (`S.intersection` con) . patConstructors . fst) $ cs
 removeConstructorsStmt _   s@(SNop) = s
 
 removeConstructorsFunMap :: IsDesugared l => S.Set TH.Name -> FunMap l -> FunMap l
-removeConstructorsFunMap con = M.map (id *** removeConstructorsStmt con) . M.filter (S.null . (`S.difference` con) . patConstructors . fst)
+removeConstructorsFunMap con = M.map (id *** removeConstructorsStmt con) . M.filter (S.null . (`S.intersection` con) . patConstructors . fst)
 
 cleanUnusedConstructors :: IsDesugared l => NProg l -> NProg l
 cleanUnusedConstructors prog = prog { 
         nProgFuns = removeConstructorsFunMap con $ nProgFuns prog,
-        nProgConts = M.map (M.filterWithKey (\n _ -> n `S.member` con)) $ nProgConts prog
+        nProgConts = M.map (M.filterWithKey (\n _ -> n `S.notMember` con)) $ nProgConts prog
     }
     where
-    con = freeConstructorsFunMap (nProgFuns prog) <> freeConstructors (nProgInitParam prog)
+    contCons = S.unions $ map M.keysSet $ M.elems $ nProgConts prog
+    con = contCons `S.difference` (freeConstructorsFunMap (nProgFuns prog) <> freeConstructors (nProgInitParam prog))
 
