@@ -52,6 +52,7 @@ main = defaultMain $ testGroup "." [
     testSlowOptCounter @CP.System "countSlowOptVar" countSlowOptVarFSM,
     testSlowOptCounter @CP.System "countSlowOptCall" countSlowOptCallFSM,
     testCounterEnMoore @CP.System "countEnMoore" countEnMooreFSM,
+    testCounterEnMoore @CP.System "countEnMoore2" countEnMoore2FSM,
     testCounterEnMoore @CP.System "countEnMoorePrim" countEnMoorePrimFSM,
     testCounterEnMealy @CP.System "countEnMealy" countEnMealyFSM,
     testCounterEnDelay @CP.System "countEnDelay" countEnDelayFSM,
@@ -365,6 +366,17 @@ forever:
     yield x
     if bb:
         x = x + 1
+|]
+
+[fsm|countEnMoore2FSM :: (CP.HiddenClockResetEnable dom)
+                      => CP.Signal dom Bool -> CP.Signal dom Integer
+input b
+var x = 0
+forever:
+    let xx = x
+    if b:
+        x = x + 1
+    yield xx
 |]
 
 [fsm|countEnMoorePrimFSM :: (CP.HiddenClockResetEnable dom)
