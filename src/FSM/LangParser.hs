@@ -173,14 +173,14 @@ parseYield = do
     (ons, ovs) <- parseVStmtOpt (\_sc' -> (,) <$> (L.symbol sc "yield" *> parseNameList sc))
     case (ons, ovs) of
         (Nothing, Nothing) -> return $ SYieldO [] $ tupE []
-        (Nothing, Just vs) -> vStmtToExp (SYieldO [TH.mkName "default"]) vs
+        (Nothing, Just vs) -> vStmtToExp (SYieldO [TH.mkName "__default"]) vs
         (Just ns, _) -> vStmtToExp (SYieldO ns) $ maybe (VExp $ tupE []) id ovs
 
 parseOutputStmt :: Parser (Stmt LvlSugared)
 parseOutputStmt = do
     (ons, vs) <- parseVStmt (\sc' -> (,) <$> (L.symbol sc' "output" *> parseNameList sc'))
     case ons of
-        Nothing -> vStmtToExp (SOutput [TH.mkName "default"]) vs
+        Nothing -> vStmtToExp (SOutput [TH.mkName "__default"]) vs
         Just ns -> vStmtToExp (SOutput ns) vs
 
 parseRet :: Parser (Stmt LvlSugared)
@@ -324,7 +324,7 @@ parseProg = do
     os <- many parseOutput
     s <- locally prDataInputs (S.union $ boundVars is) $ locally prDataVars (M.union $ boundVarsEnv is `M.union` boundVarsEnv ps) $ L.nonIndented scn $ parseBasicStmt
     scn *> eof
-    return $ Prog i t ps is (if null os then [(TH.mkName "default", Output (TH.VarE 'undefined))] else os) s
+    return $ Prog i t ps is (if null os then [(TH.mkName "__default", Output (TH.VarE 'undefined))] else os) s
 
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog LvlSugared))
 runParseProg s = runReaderT (runParserT parseProg "" s) prData

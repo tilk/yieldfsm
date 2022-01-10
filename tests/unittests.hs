@@ -144,18 +144,18 @@ forever:
 
 [fsm|oscilOutputFSM :: (CP.HiddenClockResetEnable dom)
                     => CP.Signal dom Bool
-output default = False
+output o = False
 forever:
     yield
-    yield True
+    yield<o> True
 |]
 
 [fsm|oscilOutput2FSM :: (CP.HiddenClockResetEnable dom)
                      => CP.Signal dom Bool
-output default = False
+output o = False
 forever:
     yield
-    output True
+    output<o> True
     yield
 |]
 
