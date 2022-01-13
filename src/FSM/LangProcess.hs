@@ -2,7 +2,7 @@
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, cutBlocks, removeEpsilon, makeLocalVars,
     makeTailCalls, deTailCall, previousInputs, flattenTuples,
-    foldInit, refreshVars, simplifyCase, simplifyCaseN,
+    foldInit, refreshVars, simplifyCase, simplifyCaseN, simplifyCaseNFull,
     cleanUnusedConstructors, cleanUnusedArgs, cleanUnusedConts,
     argumentPropagation, integrateCase, testFreshness, desugarLoops,
     desugarOutputs

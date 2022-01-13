@@ -18,7 +18,7 @@ optimize :: NProg LvlLowest -> NProg LvlLowest
 optimize np | np == np' = np'
             | otherwise = optimize np'
     where
-    np' = cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseN $ np
+    np' = cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseNFull $ np
 
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str = do

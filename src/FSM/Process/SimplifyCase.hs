@@ -1,4 +1,6 @@
-module FSM.Process.SimplifyCase(simplifyCase, simplifyCaseN, simplifyCaseGen, mkLetGen) where
+module FSM.Process.SimplifyCase(
+    simplifyCase, simplifyCaseN, simplifyCaseNFull, simplifyCaseGen, mkLetGen
+) where
 
 import FSM.Lang
 import FSM.FreeVars
@@ -87,6 +89,11 @@ simplifyCaseN :: IsDesugared l => NProg l -> NProg l
 simplifyCaseN prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
     where
     m = setVars VarMut (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
+
+simplifyCaseNFull :: IsDesugared l => NProg l -> NProg l
+simplifyCaseNFull prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
+    where
+    m = setVars VarLet (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
 
 setVars :: VarKind -> S.Set TH.Name -> KindMap -> KindMap
 setVars t s m = M.fromList (map (, t) $ S.toList s) `M.union` m
