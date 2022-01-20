@@ -39,12 +39,12 @@ findSCC = map (S.fromList . flattenSCC) . stronglyConnComp . map toSCC . M.toLis
     where
     toSCC (n, ns) = (n, n, S.toList ns)
 
-extendSub :: M.Map GNode (S.Set GNode) -> S.Set GNode -> M.Map GNode TH.Exp -> M.Map GNode TH.Exp
-extendSub edges scc sub | [Just e] <- preds = M.fromSet (const e) scc `M.union` sub
-                        | otherwise = sub
+extendSub :: S.Set TH.Name -> M.Map GNode (S.Set GNode) -> S.Set GNode -> M.Map GNode TH.Exp -> M.Map GNode TH.Exp
+extendSub gvs edges scc sub | [Just e] <- preds = M.fromSet (const e) scc `M.union` sub
+                            | otherwise = sub
     where
     preds = S.toList $ S.map nodeMConst $ S.filter (not . (`S.member` scc)) $ S.unions $ map (maybe S.empty id . flip M.lookup edges) $ S.toList scc
-    nodeMConst node | isConstantExpr (gNodeExp node) = Just (gNodeExp node)
+    nodeMConst node | isConstantExpr (gNodeExp node) && freeVars (gNodeExp node) `S.isSubsetOf` gvs = Just (gNodeExp node)
                     | otherwise = M.lookup node sub
 
 subPerFun :: M.Map GNode TH.Exp -> M.Map TH.Name (M.Map TH.Name TH.Exp)
@@ -65,7 +65,8 @@ argumentPropagation prog = prog {
     }
     where
     gr = makeGraph (nProgFuns prog) (callGraphNProg prog)
-    sub = subPerFun $ foldr (extendSub edges) M.empty $ findSCC gr
+    sub = subPerFun $ foldr (extendSub gvs edges) M.empty $ findSCC gr
     edges = edgeMap $ map swap gr
+    gvs = (freeVarsFunMap $ nProgFuns prog) `S.difference` boundVars (nProgInputs prog)
 
 

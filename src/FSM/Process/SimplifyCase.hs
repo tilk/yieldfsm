@@ -53,7 +53,7 @@ simplifyCaseCase m (p, s) = (p, simplifyCaseStmt (setVars VarLet (boundVars p) m
 mkLetGen :: (FreeVars a, Subst a) => (KindMap -> a -> a) -> (TH.Name -> TH.Exp -> a -> a) -> KindMap -> TH.Name -> TH.Exp -> a -> a
 mkLetGen f g m n e s
     | (TH.VarE n') <- e, Just VarLet <- M.lookup n' m = f m $ substSingle n e s
-    | isConstantExpr e || S.null (freeVars e `S.difference` M.keysSet (M.filter (== VarLet) m)) && MS.lookup n (freeVars s) <= 1 = f m $ substSingle n e s
+    | S.null (freeVars e `S.difference` M.keysSet (M.filter (== VarLet) m)) && (isConstantExpr e || MS.lookup n (freeVars s) <= 1) = f m $ substSingle n e s
     | otherwise = g n e $ f (M.insert n VarLet m) s
 
 mkLet :: IsDesugared l => KindMap -> VarKind -> TH.Name -> TH.Exp -> Stmt l -> Stmt l
