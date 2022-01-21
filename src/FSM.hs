@@ -14,11 +14,17 @@ import Prelude
 import Text.Megaparsec
 import System.IO
 
+{-
 optimize :: NProg LvlLowest -> NProg LvlLowest
-optimize np | np == np' = np'
+optimize np | np == np' = return np'
             | otherwise = optimize np'
     where
     np' = cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseNFull $ np
+-}
+optimize :: NProg LvlLowest -> TH.Q (NProg LvlLowest)
+optimize np = do
+    np' <- cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseNFull <$> hoistFromConstructors np
+    if np == np' then return np' else optimize np'
 
 mkFSM :: String -> TH.Q [TH.Dec]
 mkFSM str = do
@@ -48,7 +54,7 @@ mkFSM str = do
             np'' <- testFreshness <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np''
-            let np''' = testFreshness $ optimize np''
+            np''' <- testFreshness <$> optimize np''
             TH.runIO $ hPutStrLn stderr $ "optimize:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'''
             ret <- compileFSM (nprog2desc np''')

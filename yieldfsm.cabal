@@ -129,6 +129,7 @@ library
     FSM.Process.FoldInit
     FSM.Process.TailCallSCC
     FSM.Process.SimplifyCase
+    FSM.Process.HoistFromConstructors
     FSM.Util.MonadRefresh
     FSM.Util.MonadUnique
     FSM.Util.MultiSet
