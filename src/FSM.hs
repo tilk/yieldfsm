@@ -23,7 +23,7 @@ optimize np | np == np' = return np'
 -}
 optimize :: NProg LvlLowest -> TH.Q (NProg LvlLowest)
 optimize np = do
-    np' <- cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseNFull <$> hoistFromConstructors np
+    np' <- cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . deduplicateArgs . simplifyCaseNFull <$> hoistFromConstructors np
     if np == np' then return np' else optimize np'
 
 mkFSM :: String -> TH.Q [TH.Dec]

@@ -5,7 +5,7 @@ module FSM.LangProcess(
     foldInit, refreshVars, simplifyCase, simplifyCaseN, simplifyCaseNFull,
     cleanUnusedConstructors, cleanUnusedArgs, cleanUnusedConts,
     argumentPropagation, integrateCase, testFreshness, desugarLoops,
-    desugarOutputs, hoistFromConstructors
+    desugarOutputs, hoistFromConstructors, deduplicateArgs
 ) where
 
 import FSM.Process.MakeTailCalls
@@ -29,4 +29,5 @@ import FSM.Process.TestFreshness
 import FSM.Process.DesugarLoops
 import FSM.Process.DesugarOutputs
 import FSM.Process.HoistFromConstructors
+import FSM.Process.DeduplicateArgs
 
