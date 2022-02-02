@@ -25,6 +25,11 @@ makeCont s = do
     modify $ M.insert n' (tupP $ map TH.VarP vs, s)
     return $ SRet (VCall n' (tupE $ map TH.VarE vs))
 
+isSimpleRet :: Stmt LvlLowest -> Bool
+isSimpleRet (SRet (VExp e))    = isConstantExpr e
+isSimpleRet (SRet (VCall _ e)) = isConstantExpr e
+isSimpleRet _                  = False
+
 cutBlocksStmt :: (MonadRefresh m, MonadState (FunMap LvlLowest) m, MonadReader CBData m) => Stmt LvlLifted -> Stmt LvlLowest -> m (Stmt LvlLowest)
 cutBlocksStmt SNop         s' = return s'
 cutBlocksStmt (SRet vs)    _  = return $ SRet vs
@@ -40,9 +45,9 @@ cutBlocksStmt (SYield e) s' | not (emittingStmt s') = do -- TODO handling of inp
     else do
         s'' <- makeCont s'
         cutBlocksStmt (SYield e) s''
-cutBlocksStmt (SIf e st sf) s' =
+cutBlocksStmt (SIf e st sf) s' | isSimpleRet s' =
     SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
-cutBlocksStmt (SCase e cs) s' =
+cutBlocksStmt (SCase e cs) s'  | isSimpleRet s' =
     SCase e <$> mapM cf cs where
         cf (p, s) = do
             (p', su) <- refreshPat p
