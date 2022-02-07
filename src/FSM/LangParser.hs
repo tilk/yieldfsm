@@ -253,7 +253,7 @@ parseCase = do
     (lvl, e) <- parseHsFold stringToHsExp (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "case")
     cs <- some $ (,) <$> parseHsFoldColon stringToHsPat (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id)
                      <*> (L.indentGuard scn GT lvl *> parseStmt)
-    return $ SCase e cs
+    return $ SCase e (cs ++ [(TH.WildP, SNop)])
 
 parseNop :: Parser (Stmt LvlSugared)
 parseNop = singleSymbol "nop" *> return SNop
