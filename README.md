@@ -319,5 +319,22 @@ It distinguishes between statements, which execute in order, and expressions, wh
 Each statement takes one or more lines.
 The expressions are standard Haskell expressions, which makes integration with standard Clash code easy.
 
+## Project structure
 
+The source of the YieldFSM compiler is present in the `src/FSM` directory.
+
+* Language definition is in `Lang.hs`.
+* Parsing and pretty-printing is in `LangParser.hs` and `LangPretty.hs`.
+* Target language is in `Desc.hs`.
+
+Various transformations are defined in the `src/FSM/Process` directory, including:
+
+* Desugaring - `DesugarOutputs.hs`, `DesugarLoops.hs`, some desugaring also occurs in the parser.
+* Local mutable variables - `MakeLocalVars.hs`.
+* Lambda lifting - `LambdaLift.hs`.
+* Normalization - `CutBlocks.hs`.
+* Call stack reification - `MakeTailCalls.hs`.
+* Eliminating non-emitting transitions - `RemoveEpsilon.hs`.
+
+Most of the remaining transformations are various optimizations.
 
