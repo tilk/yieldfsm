@@ -125,7 +125,9 @@ The resulting automaton is as follows:
 entoggle2 = mealy (\b en -> (b `xor` en, b)) low
 ```
 
-Please also notice that the following YieldFSM code represents neither a Moore or Mealy style toggling automaton.
+### Magic primes
+
+Please notice that the following YieldFSM code represents neither a Moore or Mealy style toggling automaton.
 It instead describes a circuit which in the first cycle outputs `low`, and then behaves like the Mealy style automaton `entoggle1`.
 
 ```
@@ -138,9 +140,10 @@ forever:
 |]
 ```
 
-In other words, the `let` statement is crucial to achieve Moore-style behavior.
+In other words, the `let` statement in the example `entoggle2` is crucial to achieve Moore-style behavior.
+
 This occurs often in typical automata, so YieldFSM has a special syntax for this.
-If you write a name of an input variable with a prime, it represents the value of this input before the last `yield`.
+If you write a name of an input variable with a prime (a *magic prime*), it represents the value of this input before the last `yield`.
 For example, the following code represents a Moore style toggling automaton.
 
 ```
@@ -272,6 +275,41 @@ fun f b:
 forever:
     call f low
     call f high
+|]
+```
+
+### Named outputs
+
+It is often the case that an automaton being designed has multiple outputs, each of which is actively used only in some subset of its states.
+For example, a controller circuit might have one output connected to a common bus, and another to the device being controlled.
+These outputs typically have an idle state, which is a default value that can be overridden in some states.
+YieldFSM allows to have named outputs to cover this use case.
+
+Each named output has a definition in the header, which names the output and defines its initial value.
+The default value can be omitted - it is then assumed to be undefined ("don't care").
+On each `yield`, one names the outputs to be overridden inside angle brackets, and specifies their values using a tuple.
+Omitted outputs have the default value.
+For example, the automaton described below yields `[(1,0), (1,1), (0,0)]` in a cycle:
+
+```
+[fsm|cyclethree :: HiddenClockResetEnable dom => Signal dom (Unsigned 1, Unsigned 1)
+output a = 0
+output b = 0
+forever:
+    yield<a> 1
+    yield<a, b> (1, 1)
+    yield
+|]
+```
+
+YieldFSM also introduces the `output` statement. Its role is to override the value of an output in
+the current cycle without yielding immediately. This feature exists for the purpose of separation of
+concerns: using `output`, different outputs can be managed in separate parts of the program. When
+appended to the previous example, the following two lines yield `(0, 1)`:
+
+```
+    output<b> 1
+    yield
 ```
 
 ## Syntax
