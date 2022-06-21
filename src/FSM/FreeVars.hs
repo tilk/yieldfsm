@@ -135,6 +135,7 @@ instance FreeVarsPat TH.Stmt where
 instance FreeVarsPat TH.Dec where
     freeVarsPat (TH.ValD p b ds) = patFreeVars b `underPatFV` (freeVarsPat ds `underPatFV` freeVarsPat p)
     freeVarsPat (TH.FunD n cs) = patFreeVars cs `underPatFV` patSingleton n
+    freeVarsPat _ = error "unsupported declaration"
 
 instance FreeVars TH.Pat where
     freeVars = patFree . freeVarsPat
@@ -280,6 +281,7 @@ instance Subst TH.Dec where
         where s' = cutSubstPat p s
               s'' = cutSubstPat ds s'
     subst s (TH.FunD n cs) = TH.FunD n (subst (cutSubst (patSingleton n) s) cs)
+    subst _ _ = error "unsupported declaration"
 
 substStmts :: M.Map TH.Name TH.Exp -> [TH.Stmt] -> [TH.Stmt]
 substStmts _  [] = []

@@ -29,6 +29,7 @@ prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> TH.ppr e <> prettyKeywor
 prettyStmt (SBlock ss) = vcat (map prettyStmt ss)
 prettyStmt (SCase e cs) = vcat [prettyKeyword "case" <+> TH.ppr e, vcat (map f cs)]
     where f (p, s) = vcat [prettyKeyword "|" <+> TH.ppr p <> prettyKeyword ":", nest 4 $ prettyStmt s]
+prettyStmt _ = error "unsupported statement for pretty-printing"
 
 prettyVStmt :: VStmt -> Doc
 prettyVStmt (VExp e) = TH.ppr e

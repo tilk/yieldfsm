@@ -92,6 +92,7 @@ instance CleanConts TH.Stmt where
 instance CleanConts TH.Dec where
     cleanConts ns (TH.ValD p b ds) = TH.ValD (cleanConts ns p) (cleanConts ns b) (cleanConts ns ds)
     cleanConts ns (TH.FunD n cs) = TH.FunD n (cleanConts ns cs)
+    cleanConts _  _ = error "unsupported declaration"
 
 instance CleanConts TH.Body where
     cleanConts ns (TH.NormalB e) = TH.NormalB (cleanConts ns e)

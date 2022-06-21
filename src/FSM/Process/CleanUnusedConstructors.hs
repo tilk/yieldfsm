@@ -80,6 +80,7 @@ instance FreeConstructors TH.Stmt where
 instance FreeConstructors TH.Dec where
     freeConstructorsPat (TH.ValD p b ds) = freeConstructorsPat b <> freeConstructorsPat ds <> freeConstructorsPat p
     freeConstructorsPat (TH.FunD _ cs) = freeConstructorsPat cs
+    freeConstructorsPat _ = error "unsupported declaration"
 
 instance FreeConstructors TH.Body where
     freeConstructorsPat (TH.NormalB e) = freeConstructorsPat e

@@ -40,6 +40,7 @@ compilePat (TH.TupP ps) = do
 compilePat (TH.ConP n ps) = do
     rs <- mapM compilePat ps
     return (fst =<< rs, foldl TH.AppT (TH.ConT n) $ map snd rs)
+compilePat _ = error "unsupported pattern"
 
 makeConNames :: String -> [TH.Name] -> M.Map TH.Name TH.Name
 makeConNames nm = fst . foldl' f (M.empty, M.empty) where

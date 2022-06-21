@@ -7,10 +7,7 @@ import FSM.Util.MonadRefresh
 import Prelude
 import Data.Maybe
 import Data.Monoid
-import Control.Arrow
 import Control.Monad.Writer
-import qualified Data.Set as S
-import qualified Data.Map.Strict as M
 import qualified Language.Haskell.TH as TH
 
 matchApp :: TH.Exp -> (TH.Exp, [TH.Exp])
