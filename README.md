@@ -1,6 +1,6 @@
 # YieldFSM
 
-This project is a library for the hardware description language Clash which allows to generate finite state machines from simple imperative descriptions.
+This project is a library for the hardware description language [Clash](https://clash-lang.org/) which allows to generate finite state machines from simple imperative descriptions.
 For example, the following code implements a simple counter circuit:
 
 ```
@@ -17,6 +17,9 @@ Standard language constructs like `while` loops, function calls etc. are support
 This is not a high level synthesis (HLS) language. 
 A direct relationship exists between the written code and the timing behavior of the resulting circuit.
 YieldFSM code is compiled to a single `mealy` call and some companion datatypes.
+
+YieldFSM is built on top of the Clash HDL, using Template Haskell.
+In order to synthesize or simulate circuits designed using YieldFSM, one needs to follow [the Clash documentation](https://clash-lang.org/documentation/), in particular the User Guide and Tutorial.
 
 ## Tutorial
 
@@ -337,4 +340,3 @@ Various transformations are defined in the `src/FSM/Process` directory, includin
 * Eliminating non-emitting transitions - `RemoveEpsilon.hs`.
 
 Most of the remaining transformations are various optimizations.
-
