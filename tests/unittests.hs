@@ -328,7 +328,7 @@ fun f i:
     | True:
         yield i
     | False:
-        nop
+        skip
     yield i
     ret call f (i+1)
 ret call f 0

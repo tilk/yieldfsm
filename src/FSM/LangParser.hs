@@ -256,7 +256,7 @@ parseCase = do
     return $ SCase e (cs ++ [(TH.WildP, SNop)])
 
 parseNop :: Parser (Stmt LvlSugared)
-parseNop = singleSymbol "nop" *> return SNop
+parseNop = singleSymbol "skip" *> return SNop
 
 parseContinue :: Parser (Stmt LvlSugared)
 parseContinue = singleSymbol "continue" >> return (SBreak BrkCont)

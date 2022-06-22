@@ -15,7 +15,7 @@ prettyFun fs s = vcat $ map f (M.toList fs) ++ [prettyStmt s]
     where f (n, (p, s')) = vcat [prettyKeyword "fun" <+> TH.ppr n <+> TH.ppr p <> prettyKeyword ":", nest 4 $ prettyStmt s']
 
 prettyStmt :: Stmt l -> Doc
-prettyStmt SNop = prettyKeyword "nop"
+prettyStmt SNop = prettyKeyword "skip"
 prettyStmt (SLet t n vs s) = vcat [prettyKeyword (kw t) <+> TH.ppr n <+> prettyKeyword "=" <+> prettyVStmt vs, prettyStmt s]
     where
     kw VarLet = "let"
