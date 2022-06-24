@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module FSM.Process.MakeTailCalls(makeTailCalls) where
+module FSM.Process.StackReify(stackReify) where
 
 import FSM.Lang
 import FSM.FreeVars
@@ -45,8 +45,8 @@ data ContTgt = ContTgtFun TH.Name | ContTgtCont TH.Name | ContTgtFunCont TH.Name
 mlookup :: (Ord k, Monoid a) => k -> M.Map k a -> a
 mlookup k = maybe mempty id . M.lookup k
 
-makeTailCallsStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt LvlLowest -> m (Stmt LvlLowest)
-makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
+stackReifyStmt :: (MonadRefresh m, MonadUnique m, MonadReader TCData m, MonadWriter [ContData] m) => Stmt LvlLowest -> m (Stmt LvlLowest)
+stackReifyStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
     TCData name cfn _ an fvs rfs _ part partInj <- ask
     if f `S.member` rfs then do
         let vs = S.toList $ freeVars vst `S.difference` S.insert n fvs
@@ -70,11 +70,11 @@ makeTailCallsStmt   (SLet VarLet n (VCall f e) (SRet vst)) = do
                 tell [ContData cn f n vs e' (ContTgtCont an)]
                 return $ SRet (VCall f (tupE [e, TH.AppE (TH.ConE cn) (tupE $ map TH.VarE $ cfn : vs)]))
     else return $ SRet (VCall f e)
-makeTailCallsStmt   (SLet VarLet n (VExp e) s) = locally tcDataFreeVars (S.delete n) $ SLet VarLet n (VExp e) <$> makeTailCallsStmt s
-makeTailCallsStmt   (SIf e st sf) = SIf e <$> makeTailCallsStmt st <*> makeTailCallsStmt sf
-makeTailCallsStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> makeTailCallsStmt s) cs
-makeTailCallsStmt   (SRet (VExp e)) = SRet <$> (VCall <$> view tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> view tcDataCont))
-makeTailCallsStmt s@(SRet (VCall f e)) = do
+stackReifyStmt   (SLet VarLet n (VExp e) s) = locally tcDataFreeVars (S.delete n) $ SLet VarLet n (VExp e) <$> stackReifyStmt s
+stackReifyStmt   (SIf e st sf) = SIf e <$> stackReifyStmt st <*> stackReifyStmt sf
+stackReifyStmt   (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> stackReifyStmt s) cs
+stackReifyStmt   (SRet (VExp e)) = SRet <$> (VCall <$> view tcDataApply <*> ((\cfn -> tupE [e, TH.VarE cfn]) <$> view tcDataCont))
+stackReifyStmt s@(SRet (VCall f e)) = do
     r <- S.member f <$> view tcDataReturning
     if not r then return s
     else do
@@ -88,12 +88,12 @@ makeTailCallsStmt s@(SRet (VCall f e)) = do
                             | otherwise -> error "should not happen"
         cfn <- view tcDataCont
         return $ SRet $ VCall f $ tupE [e, inj $ TH.VarE cfn]
-makeTailCallsStmt   (SYieldT e s) = SYieldT e <$> makeTailCallsStmt s
-makeTailCallsStmt   (SLet VarLet _ (VCall _ _) _) = error "Not in tree form"
-makeTailCallsStmt   (SLet VarMut _ _ _) = error "Not in tree form"
+stackReifyStmt   (SYieldT e s) = SYieldT e <$> stackReifyStmt s
+stackReifyStmt   (SLet VarLet _ (VCall _ _) _) = error "Not in tree form"
+stackReifyStmt   (SLet VarMut _ _ _) = error "Not in tree form"
 
-makeTailCalls :: MonadRefresh m => NProg LvlLowest -> m (NProg LvlLowest)
-makeTailCalls prog = evalUniqueT $ do
+stackReify :: MonadRefresh m => NProg LvlLowest -> m (NProg LvlLowest)
+stackReify prog = evalUniqueT $ do
     partInj <- forM (M.fromSet (const ()) edges) $ \() -> makeSeqName $ "C" ++ name
     partInfo <- fmap (M.map fromJust . M.filter isJust) $ forM (partitionSets part) $ \ns -> do
         let n = S.findMin ns
@@ -107,10 +107,10 @@ makeTailCalls prog = evalUniqueT $ do
         case M.lookup (partitionLookup n part) partInfo of
             Just (ctn, an) -> do
                 cfn <- makeName "c"
-                s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n part partInj) $ makeTailCallsStmt s
+                s' <- flip runReaderT (TCData name cfn ctn an fvs rfs n part partInj) $ stackReifyStmt s
                 return (n, (tupP [p, TH.VarP cfn], s'))
             Nothing -> do
-                s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n part partInj) $ makeTailCallsStmt s
+                s' <- flip runReaderT (TCData name (error "cfn") (error "ctn") (error "an") fvs rfs n part partInj) $ stackReifyStmt s
                 return (n, (p, s'))
     let cdmap = M.fromListWith (++) $ map (flip partitionLookup part . contDataCalled &&& return) cds
     let injmap = M.fromListWith (++) $ map (\((b, b'), icn) -> (b', [(icn, snd $ fromJust $ M.lookup b partInfo)])) $ M.toList partInj

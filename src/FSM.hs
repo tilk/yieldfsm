@@ -45,11 +45,11 @@ mkFSM str = do
             np <- lambdaLift p''
             TH.runIO $ hPutStrLn stderr $ "lambdaLift:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np
-            np0 <- cutBlocks np
-            TH.runIO $ hPutStrLn stderr $ "cutBlocks:"
+            np0 <- normalization np
+            TH.runIO $ hPutStrLn stderr $ "normalization:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np0
-            np' <- foldInit . simplifyCaseN <$> makeTailCalls np0
-            TH.runIO $ hPutStrLn stderr $ "makeTailCalls:"
+            np' <- foldInit . simplifyCaseN <$> stackReify np0
+            TH.runIO $ hPutStrLn stderr $ "stackReify:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyNProgHPJ np'
             np'' <- testFreshness <$> removeEpsilon np'
             TH.runIO $ hPutStrLn stderr $ "removeEpsilon:"

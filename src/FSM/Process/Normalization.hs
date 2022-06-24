@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module FSM.Process.CutBlocks(cutBlocks) where
+module FSM.Process.Normalization(normalization) where
 
 import Prelude
 import FSM.Lang
@@ -30,49 +30,49 @@ isSimpleRet (SRet (VExp e))    = isConstantExpr e
 isSimpleRet (SRet (VCall _ e)) = isConstantExpr e
 isSimpleRet _                  = False
 
-cutBlocksStmt :: (MonadRefresh m, MonadState (FunMap LvlLowest) m, MonadReader CBData m) => Stmt LvlLifted -> Stmt LvlLowest -> m (Stmt LvlLowest)
-cutBlocksStmt SNop         s' = return s'
-cutBlocksStmt (SRet vs)    _  = return $ SRet vs
-cutBlocksStmt (SBlock [])  s' = return s'
-cutBlocksStmt (SBlock [s]) s' = cutBlocksStmt s s'
-cutBlocksStmt (SBlock (s:ss)) s' = do
-    s'' <- cutBlocksStmt (SBlock ss) s'
-    cutBlocksStmt s s''
-cutBlocksStmt (SYield e) s' | not (emittingStmt s') = do -- TODO handling of inputs
+normalizationStmt :: (MonadRefresh m, MonadState (FunMap LvlLowest) m, MonadReader CBData m) => Stmt LvlLifted -> Stmt LvlLowest -> m (Stmt LvlLowest)
+normalizationStmt SNop         s' = return s'
+normalizationStmt (SRet vs)    _  = return $ SRet vs
+normalizationStmt (SBlock [])  s' = return s'
+normalizationStmt (SBlock [s]) s' = normalizationStmt s s'
+normalizationStmt (SBlock (s:ss)) s' = do
+    s'' <- normalizationStmt (SBlock ss) s'
+    normalizationStmt s s''
+normalizationStmt (SYield e) s' | not (emittingStmt s') = do -- TODO handling of inputs
     ivs <- asks cbDataInputVars
     if S.null $ freeVars s' `S.intersection` ivs
     then return $ SYieldT e s'
     else do
         s'' <- makeCont s'
-        cutBlocksStmt (SYield e) s''
-cutBlocksStmt (SIf e st sf) s' | isSimpleRet s' =
-    SIf e <$> cutBlocksStmt st s' <*> cutBlocksStmt sf s'
-cutBlocksStmt (SCase e cs) s'  | isSimpleRet s' =
+        normalizationStmt (SYield e) s''
+normalizationStmt (SIf e st sf) s' | isSimpleRet s' =
+    SIf e <$> normalizationStmt st s' <*> normalizationStmt sf s'
+normalizationStmt (SCase e cs) s'  | isSimpleRet s' =
     SCase e <$> mapM cf cs where
         cf (p, s) = do
             (p', su) <- refreshPat p
-            (p',) <$> cutBlocksStmt (rename su s) s'
-cutBlocksStmt (SLet _ ln vs@(VExp _) s) s' = do
+            (p',) <$> normalizationStmt (rename su s) s'
+normalizationStmt (SLet _ ln vs@(VExp _) s) s' = do
     ln' <- refreshName ln
-    SLet VarLet ln' vs <$> cutBlocksStmt (renameSingle ln ln' s) s'
-cutBlocksStmt (SLet _ ln vs@(VCall _ _) s) s' = do
+    SLet VarLet ln' vs <$> normalizationStmt (renameSingle ln ln' s) s'
+normalizationStmt (SLet _ ln vs@(VCall _ _) s) s' = do
     ln' <- refreshName ln
-    s'' <- cutBlocksStmt (renameSingle ln ln' s) s'
+    s'' <- normalizationStmt (renameSingle ln ln' s) s'
     s''' <- makeCont s''
     return $ SLet VarLet ln' vs s'''
-cutBlocksStmt (SAssign ln e) s' = do
+normalizationStmt (SAssign ln e) s' = do
     ln' <- refreshName ln
     return $ SLet VarLet ln' (VExp e) $ renameSingle ln ln' s'
-cutBlocksStmt s s' = do
+normalizationStmt s s' = do
     s'' <- makeCont s'
-    cutBlocksStmt s s''
+    normalizationStmt s s''
 
-cutBlocks :: MonadRefresh m => NProg LvlLifted -> m (NProg LvlLowest)
-cutBlocks prog = do
+normalization :: MonadRefresh m => NProg LvlLifted -> m (NProg LvlLowest)
+normalization prog = do
     let fvs = freeVarsFunMap $ nProgFuns prog
     let ivs = boundVars $ nProgInputs prog
     fs' <- flip execStateT M.empty $ forM_ (M.toList $ nProgFuns prog) $ \(n, (p, s)) -> do
-        s' <- flip runReaderT (CBData fvs ivs n) $ cutBlocksStmt s (SRet (VExp $ tupE []))
+        s' <- flip runReaderT (CBData fvs ivs n) $ normalizationStmt s (SRet (VExp $ tupE []))
         modify $ M.insert n (p, s')
     return $ prog { nProgFuns = fs' }
 

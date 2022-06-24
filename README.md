@@ -335,8 +335,8 @@ Various transformations are defined in the `src/FSM/Process` directory, includin
 * Desugaring - `DesugarOutputs.hs`, `DesugarLoops.hs`, some desugaring also occurs in the parser.
 * Local mutable variables - `MakeLocalVars.hs`.
 * Lambda lifting - `LambdaLift.hs`.
-* Normalization - `CutBlocks.hs`.
-* Call stack reification - `MakeTailCalls.hs`.
+* Normalization - `Normalization.hs`.
+* Call stack reification - `StackReify.hs`.
 * Eliminating non-emitting transitions - `RemoveEpsilon.hs`.
 
 Most of the remaining transformations are various optimizations.

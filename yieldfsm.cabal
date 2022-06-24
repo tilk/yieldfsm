@@ -116,12 +116,12 @@ library
     FSM.Process.CleanUnusedConstructors
     FSM.Process.FlattenTuples
     FSM.Process.PreviousInputs
-    FSM.Process.MakeTailCalls
+    FSM.Process.StackReify
     FSM.Process.CallGraph
     FSM.Process.ReturningFuns
     FSM.Process.RefreshFunctions
     FSM.Process.RefreshVars
-    FSM.Process.CutBlocks
+    FSM.Process.Normalization
     FSM.Process.MakeLocalVars
     FSM.Process.DeTailCall
     FSM.Process.RemoveEpsilon

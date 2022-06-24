@@ -1,17 +1,17 @@
 {-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies, FlexibleContexts #-}
 module FSM.LangProcess(
-    lambdaLift, refreshFunctions, cutBlocks, removeEpsilon, makeLocalVars,
-    makeTailCalls, deTailCall, previousInputs, flattenTuples,
+    lambdaLift, refreshFunctions, normalization, removeEpsilon, makeLocalVars,
+    stackReify, deTailCall, previousInputs, flattenTuples,
     foldInit, refreshVars, simplifyCase, simplifyCaseN, simplifyCaseNFull,
     cleanUnusedConstructors, cleanUnusedArgs, cleanUnusedConts,
     argumentPropagation, integrateCase, testFreshness, desugarLoops,
     desugarOutputs, hoistFromConstructors, deduplicateArgs
 ) where
 
-import FSM.Process.MakeTailCalls
+import FSM.Process.StackReify
 import FSM.Process.RefreshFunctions
 import FSM.Process.RefreshVars
-import FSM.Process.CutBlocks
+import FSM.Process.Normalization
 import FSM.Process.MakeLocalVars
 import FSM.Process.DeTailCall
 import FSM.Process.RemoveEpsilon
