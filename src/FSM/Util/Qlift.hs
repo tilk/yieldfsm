@@ -1,6 +1,13 @@
-module FSM.Util.Qlift where
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
 
--- This module is only required because the Quote class is not available in GHC 8.10
+Monads which contain `TH.Q`.
+
+This module is only required because the Quote class is not available in GHC 8.10.
+|-}
+module FSM.Util.Qlift where
 
 import qualified Language.Haskell.TH as TH
 import Control.Monad.Reader

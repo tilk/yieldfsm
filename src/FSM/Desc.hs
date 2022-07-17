@@ -1,4 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Target language of the YieldFSM compiler. The 'FSM' data type is compiled
+to Mealy machines in the module 'FSM.DescGenADT'.
+|-}
 module FSM.Desc where
 
 import qualified Language.Haskell.TH as TH

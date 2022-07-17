@@ -1,5 +1,12 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TupleSections #-}
-module FSM.DescGenADT where
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Compiles the automata descriptions in the target language to Mealy machines.
+|-}
+module FSM.DescGenADT(compileFSM) where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map.Strict as M

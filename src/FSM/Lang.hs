@@ -1,3 +1,10 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Defines the YieldFSM language.
+|-}
 module FSM.Lang where
 
 import qualified Language.Haskell.TH as TH

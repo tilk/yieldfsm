@@ -1,3 +1,10 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+The pretty-printer.
+|-}
 module FSM.LangPretty(prettyProgHPJ, prettyNProgHPJ) where
 
 import FSM.Lang

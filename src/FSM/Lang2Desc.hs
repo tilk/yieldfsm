@@ -1,4 +1,11 @@
 {-# LANGUAGE ViewPatterns #-}
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Translates YieldFSM programs (in the final form) to the target language.
+|-}
 module FSM.Lang2Desc(nprog2desc) where
 
 import qualified Data.Map.Strict as M

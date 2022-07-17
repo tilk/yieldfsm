@@ -1,4 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+A monad for fresh Template Haskell names.
+|-}
 module FSM.Util.MonadRefresh(MonadRefresh(..), makeSeqName, refreshName, refreshNameWithPrefix, refreshSeqNameWithPrefix, refreshPat) where
 
 import Prelude

@@ -1,3 +1,11 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+A simple multiset data structure: an element can occur multiple times,
+but the ordering is irrelevant.
+|-}
 module FSM.Util.MultiSet where
 
 import Prelude

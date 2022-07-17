@@ -1,3 +1,10 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+A type class for set-like data structures.
+|-}
 {-# LANGUAGE QuantifiedConstraints #-}
 module FSM.Util.SetClass where
 
