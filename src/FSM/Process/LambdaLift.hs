@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines the lambda-lifting transformation.
+-}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.LambdaLift(lambdaLift) where
 
@@ -57,6 +59,32 @@ lambdaLiftVStmt    (VCall n e) = do
     (n', vs) <- views llDataEnv (fromJust . M.lookup n)
     return $ VCall n' $ tupE $ map TH.VarE vs ++ [e]
 
+{-|
+Performs the lambda-lifting transformation.
+It assumes that the input program has no non-local references to mutable
+variables. The result is in lambda-lifted form.
+
+Example:
+
+> let x = 1
+> fun f y:
+>     yield y
+>     ret call f (x + y)
+> let z = 0
+> ret call f z
+
+Is translated to:
+
+> fun init ():
+>     let x = 1
+>     let z = 0
+>     ret call f (x, z)
+> fun f (x, y):
+>     yield y
+>     ret call f (x, x + y)
+> ret call init ()
+
+-}
 lambdaLift :: MonadRefresh m => Prog LvlFull -> m (NProg LvlLifted)
 lambdaLift prog = do
     (s, fm) <- flip runStateT M.empty $ flip runReaderT (LLData (freeVars $ progBody prog) M.empty) $ lambdaLiftStmt (progBody prog)

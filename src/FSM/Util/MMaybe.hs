@@ -5,7 +5,7 @@ Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 A `Maybe` type with two `Nothing`s, with different behavior with respect
 to `<|>`.
-|-}
+-}
 module FSM.Util.MMaybe where
 
 import Prelude

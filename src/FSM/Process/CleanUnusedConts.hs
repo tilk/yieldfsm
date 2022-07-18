@@ -1,9 +1,11 @@
+{-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 {-|
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
-{-# LANGUAGE ViewPatterns, PatternSynonyms #-}
+
+Defines the trivial/unused continuation removal optimization.
+-}
 module FSM.Process.CleanUnusedConts(cleanUnusedConts) where
 
 import FSM.Lang
@@ -138,6 +140,12 @@ instance (CleanConts a, CleanConts b) => CleanConts (a, b) where
 cleanContsFunMap :: IsDesugared l => S.Set TH.Name -> FunMap l -> FunMap l
 cleanContsFunMap ns = M.map (cleanConts ns *** cleanConts ns)
 
+{-|
+Removes unused and trivial continuations. A continuation is unused when
+it has zero constructors (all of them were removed by other optimizations).
+A continuation is trivial when it has exactly one constructor.
+Trivial continuations are replaced with tuples.
+-}
 cleanUnusedConts :: IsDesugared l => NProg l -> NProg l
 cleanUnusedConts prog = prog {
         nProgFuns = cleanContsFunMap ns $ nProgFuns prog,

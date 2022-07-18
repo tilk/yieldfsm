@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines the unused argument removal optimization.
+-}
 module FSM.Process.CleanUnusedArgs(cleanUnusedArgs) where
 
 import FSM.Lang
@@ -87,6 +89,24 @@ doCleanFunMap :: IsLifted l => UFMap -> FunMap l -> FunMap l
 doCleanFunMap m = M.mapWithKey f where
     f n (p, s) = (doCleanPat m n p, doCleanStmt m s)
 
+{-|
+Unused argument removal optimization.
+If some function argument is not used in the body, it is removed.
+
+Example:
+
+> fun f (x, y):
+>     yield x
+>     ret call f (x + 1, 0)
+> ret call f (0, 0)
+
+Is translated to:
+
+> fun f x:
+>     yield x
+>     ret call f (x + 1)
+> ret call f 0
+-}
 cleanUnusedArgs :: IsLifted l => NProg l -> NProg l
 cleanUnusedArgs prog = prog {
     nProgFuns = doCleanFunMap unuseds (nProgFuns prog),

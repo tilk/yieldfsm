@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-|
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
-{-# LANGUAGE FlexibleContexts #-}
+
+This module defines the non-emitting transition elimination transformation.
+-}
 module FSM.Process.RemoveEpsilon(removeEpsilon) where
 
 import Prelude
@@ -57,6 +59,36 @@ removeEpsilonFrom f = do
         s' <- locally reDataEmitted (const False) $ locally reDataVisited (const S.empty) $ removeEpsilonStmt s
         modify $ M.insert f (p, s')
 
+{-|
+Eliminates non-emitting transitions from the automaton. This guarantees
+that, on every statement branch from the root to the tail call,
+there exists exactly one @yield@ statement.
+
+Example:
+
+> fun f ():
+>     if i:
+>         ret call g ()
+>     else:
+>         yield 1
+>         ret call g ()
+> fun g ():
+>     yield 0
+>     ret call f ()
+
+Translates to:
+
+> fun f ():
+>     if i:
+>         yield 0
+>         ret call f ()
+>     else:
+>         yield 1
+>         ret call g ()
+> fun g ():
+>     yield 0
+>     ret call f ()
+-}
 removeEpsilon :: (IsLowered l, MonadRefresh m) => NProg l -> m (NProg l)
 removeEpsilon prog = do
     fs' <- flip execStateT M.empty $ flip runReaderT (REData (nProgFuns prog) (boundVars $ nProgInputs prog) False S.empty) $ removeEpsilonFrom (nProgInit prog)

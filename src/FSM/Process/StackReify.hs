@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-|
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
-{-# LANGUAGE FlexibleContexts #-}
+
+This module defines the stack reification transformation.
+-}
 module FSM.Process.StackReify(stackReify) where
 
 import FSM.Lang
@@ -97,6 +99,44 @@ stackReifyStmt   (SYieldT e s) = SYieldT e <$> stackReifyStmt s
 stackReifyStmt   (SLet VarLet _ (VCall _ _) _) = error "Not in tree form"
 stackReifyStmt   (SLet VarMut _ _ _) = error "Not in tree form"
 
+{-|
+Reifies the control stack. The only function calls occuring in the resulting
+program are tail calls. The call stack is represented using a number of
+continuation data types.
+
+Example:
+
+> fun inc n:
+>     if n == 3:
+>         ret 0
+>     else:
+>         ret n + 1
+> fun loop n:
+>     let n1 = call inc n
+>     ret call loop1 (n, n1)
+> fun loop1 (n, n1):
+>     yield n
+>     ret call loop n1
+> ret call loop 0
+
+Is translated to:
+
+> data Cont_inc a = C a
+> fun inc (n, c):
+>     if n == 3:
+>         ret call ap_inc (c, 0)
+>     else:
+>         ret call ap_inc (c, n + 1)
+> fun ap_inc (c, n1):
+>     case c
+>     | C n:
+>         ret call loop1 (n, n1)
+> fun loop n:
+>     ret call inc (n, C n)
+> fun loop1 (n, n1):
+>     yield n
+>     ret call loop n1
+-}
 stackReify :: MonadRefresh m => NProg LvlLowest -> m (NProg LvlLowest)
 stackReify prog = evalUniqueT $ do
     partInj <- forM (M.fromSet (const ()) edges) $ \() -> makeSeqName $ "C" ++ name

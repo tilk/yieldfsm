@@ -2,7 +2,7 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+-}
 module FSM.Process.PreviousInputs(previousInputs) where
 
 import FSM.Lang

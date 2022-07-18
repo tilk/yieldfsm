@@ -1,4 +1,10 @@
-{-# LANGUAGE TemplateHaskell, TupleSections, GeneralizedNewtypeDeriving, DerivingStrategies, FlexibleContexts #-}
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Program transformations.
+-}
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, normalization, removeEpsilon, makeLocalVars,
     stackReify, deTailCall, previousInputs, flattenTuples,

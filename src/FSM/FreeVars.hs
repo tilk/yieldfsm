@@ -4,7 +4,7 @@ License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 Defines helper functions related to free variables and substitutions.
-|-}
+-}
 module FSM.FreeVars where
 
 import qualified Language.Haskell.TH as TH

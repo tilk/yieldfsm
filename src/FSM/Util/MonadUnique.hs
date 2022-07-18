@@ -5,7 +5,7 @@ License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 A monad for generating unique identifiers.
-|-}
+-}
 module FSM.Util.MonadUnique(MonadUnique, UniqueT, evalUniqueT, fresh) where
 
 import Prelude

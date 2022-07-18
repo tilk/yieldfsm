@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines the normalization translation.
+-}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.Normalization(normalization) where
 
@@ -72,6 +74,40 @@ normalizationStmt s s' = do
     s'' <- makeCont s'
     normalizationStmt s s''
 
+{-|
+Performs the normalization translation. In the normalized form, YieldFSM
+statements cannot be combined with the semicolon operator,
+and every function call is immediately followed by a return statement.
+This translation also eliminates mutable variables.
+Code duplication is avoided by creating additional functions.
+
+Example:
+
+> fun loop n_init:
+>     var n = n_init
+>     if n == 3:
+>         n = 0
+>     else:
+>         n = n + 1
+>     yield n
+>     ret call loop n
+> ret call loop 0
+
+Is translated to:
+
+> fun loop n_init:
+>     let n1 = n_init
+>     if n == 3:
+>         let n2 = 0
+>         ret call loop1 n2
+>     else:
+>         let n2 = n1 + 1
+>         ret call loop1 n2
+> fun loop1 n2:
+>     yield n2
+>     ret call loop n2
+> ret call loop 0
+-}
 normalization :: MonadRefresh m => NProg LvlLifted -> m (NProg LvlLowest)
 normalization prog = do
     let fvs = freeVarsFunMap $ nProgFuns prog

@@ -2,7 +2,10 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines the call graph datatype and functions which
+compute call graphs.
+-}
 module FSM.Process.CallGraph(CGEdge(..), CG, callGraph, callGraphFlat, callGraphProg, callGraphNProg) where
 
 import FSM.Lang

@@ -4,7 +4,7 @@ License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 Defines the YieldFSM language.
-|-}
+-}
 module FSM.Lang where
 
 import qualified Language.Haskell.TH as TH

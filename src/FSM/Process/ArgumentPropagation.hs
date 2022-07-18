@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines the argument propagation optimization.
+-}
 module FSM.Process.ArgumentPropagation(argumentPropagation) where
 
 import FSM.Lang
@@ -64,6 +66,27 @@ extendFuns sub fs = M.mapWithKey f fs
     f n (p, s) = (p, foldr g s (M.toList $ maybe M.empty id $ M.lookup n sub))
     g (n, e) s = SLet VarLet n (VExp e) s
 
+{-|
+Performs the argument propagation optimization.
+If some argument of a function is given the same, constant value in every call,
+this value is propagated to the function. Cleaning up the results (e.g.
+removing the now unneeded argument) is left for other optimizations.
+
+Example:
+
+> fun f n:
+>     yield n
+>     ret call f n
+> ret call f 0
+
+Is translated to:
+
+> fun f n:
+>     let n = 0
+>     yield n
+>     ret call f n
+> ret call f 0
+-}
 argumentPropagation :: IsDesugared l => NProg l -> NProg l
 argumentPropagation prog = prog {
         nProgFuns = extendFuns sub $ nProgFuns prog

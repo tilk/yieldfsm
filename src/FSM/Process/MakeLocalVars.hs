@@ -2,7 +2,10 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+This module defines a transformation which ensures that all references
+to mutable variables are local.
+-}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.MakeLocalVars(makeLocalVars) where
 
@@ -29,6 +32,41 @@ data LVData = LVData {
 
 $(makeLenses ''LVData)
 
+{-|
+Makes all references to mutable variables local - i.e. the mutable variable
+is defined in the same function where it's used. To achieve that, it creates
+local copies of non-local variables. They are initialized from new function
+arguments, and their final values are returned in a tuple.
+
+Example:
+
+> var n = 0
+> fun loop ():
+>     fun f ():
+>         n = n + 1
+>         ret ()
+>     let _ = call f ()
+>     yield n
+>     ret call loop ()
+> ret call loop ()
+
+Is translated to:
+
+> var n = 0
+> fun loop ((), n_init):
+>     var n = n_init
+>     fun f ((), n_init):
+>         var n = n_init
+>         n = n + 1
+>         ret ((), n)
+>     let rt = call f ((), n)
+>     case rt
+>     | (_, n_new):
+>         n = n_new
+>         yield n
+>         ret call loop ((), n)
+> ret call loop ((), n)
+-}
 makeLocalVars :: (IsDesugared l, WithAssign l, MonadRefresh m) => Prog l -> m (Prog l)
 makeLocalVars prog = do
     s' <- flip runReaderT (LVData False (returningFuns $ progBody prog) [] [] M.empty) $ makeLocalVarsStmt $ progBody prog

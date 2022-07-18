@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+Defines the unused continuation constructor removal optimization.
+-}
 module FSM.Process.CleanUnusedConstructors(cleanUnusedConstructors) where
 
 import FSM.Lang
@@ -152,6 +154,10 @@ removeConstructorsStmt _   s@(SNop) = s
 removeConstructorsFunMap :: IsDesugared l => S.Set TH.Name -> FunMap l -> FunMap l
 removeConstructorsFunMap con = M.map (id *** removeConstructorsStmt con) . M.filter (S.null . (`S.intersection` con) . patConstructors . fst)
 
+{-|
+Removes unused continuation constructors. A constructor can become unused
+as a result of other optimizations.
+-}
 cleanUnusedConstructors :: IsDesugared l => NProg l -> NProg l
 cleanUnusedConstructors prog = prog { 
         nProgFuns = removeConstructorsFunMap con $ nProgFuns prog,

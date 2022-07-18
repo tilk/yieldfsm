@@ -5,7 +5,7 @@ License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 The parser.
-|-}
+-}
 module FSM.LangParser(runParseProg) where
 
 import qualified Language.Haskell.TH as TH
