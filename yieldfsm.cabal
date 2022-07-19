@@ -123,7 +123,6 @@ library
     FSM.Process.RefreshVars
     FSM.Process.Normalization
     FSM.Process.MakeLocalVars
-    FSM.Process.DeTailCall
     FSM.Process.RemoveEpsilon
     FSM.Process.LambdaLift
     FSM.Process.FoldInit

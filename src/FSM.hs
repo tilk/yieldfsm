@@ -19,13 +19,6 @@ import Prelude
 import Text.Megaparsec
 import System.IO
 
-{-
-optimize :: NProg LvlLowest -> NProg LvlLowest
-optimize np | np == np' = return np'
-            | otherwise = optimize np'
-    where
-    np' = cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . simplifyCaseNFull $ np
--}
 optimize :: NProg LvlLowest -> TH.Q (NProg LvlLowest)
 optimize np = do
     np' <- cleanUnusedArgs . argumentPropagation . flattenTuples . integrateCase . cleanUnusedConts . cleanUnusedConstructors . deduplicateArgs . simplifyCaseNFull <$> hoistFromConstructors np
@@ -41,8 +34,8 @@ mkFSM str = do
             p1 <- desugarLoops =<< desugarOutputs p
             TH.runIO $ hPutStrLn stderr $ "desugarLoops:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p1
-            p' <- deTailCall . previousInputs =<< refreshVars =<< refreshFunctions p1
-            TH.runIO $ hPutStrLn stderr $ "deTailCall:"
+            p' <- fmap previousInputs . refreshVars =<< refreshFunctions p1
+            TH.runIO $ hPutStrLn stderr $ "previousInputs:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- simplifyCase <$> makeLocalVars p'
             TH.runIO $ hPutStrLn stderr $ "makeLocalVars:"
