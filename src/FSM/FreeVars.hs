@@ -5,7 +5,13 @@ Maintainer :  Marek Materzok <tilk@tilk.eu>
 
 Defines helper functions related to free variables and substitutions.
 -}
-module FSM.FreeVars where
+module FSM.FreeVars(
+    FreeVars(..), FreeVarsPat(..), PatFV(..),
+    patSingleton, patFreeSingleton, patFreeVars, underPat,
+    boundVars, freeVarsFunMap,
+    Subst(..), substSingle, rename, renameSingle, boundAsVars, substPat,
+    isConstantExpr
+) where
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Set as S
@@ -16,13 +22,23 @@ import FSM.Desc
 import Control.Arrow
 import qualified FSM.Util.SetClass as SC
 
+-- | Things that have free variables.
 class FreeVars a where
     freeVars :: SC.SetClass s => a -> s TH.Name
 
+-- | Things that have bound and free variables.
 class FreeVarsPat a where
     freeVarsPat :: SC.SetClass s => a -> PatFV s
 
-data PatFV s = PatFV { patBound :: s TH.Name, patFree :: s TH.Name }
+{-|
+Represents bound and free variables (e.g. for a pattern).
+A Haskell pattern can both bind variables, and have free variables (e.g.
+in view patterns).
+-}
+data PatFV s = PatFV {
+    patBound :: s TH.Name, -- ^ Bound variables.
+    patFree  :: s TH.Name  -- ^ Free variables.
+}
 
 instance SC.SetClass s => Semigroup (PatFV s) where
     PatFV s1 s2 <> PatFV t1 t2 = PatFV (s1 `SC.union` t1) (s2 `SC.union` t2)
@@ -30,15 +46,22 @@ instance SC.SetClass s => Semigroup (PatFV s) where
 instance SC.SetClass s => Monoid (PatFV s) where
     mempty = PatFV mempty mempty
 
+-- | A single bound variable.
 patSingleton :: SC.SetClass s => TH.Name -> PatFV s
 patSingleton n = PatFV (SC.singleton n) mempty
 
+-- | A single free variable.
 patFreeSingleton :: SC.SetClass s => TH.Name -> PatFV s
 patFreeSingleton n = PatFV mempty (SC.singleton n)
 
+-- | Free variables of something, as a 'PatFV'.
 patFreeVars :: (SC.SetClass s, FreeVars a) => a -> PatFV s
 patFreeVars e = PatFV mempty (freeVars e)
 
+{-|
+Free variables under a pattern. The pattern's bound variables
+reduce the set of free variables; its free variables extend it.
+-}
 underPat :: SC.SetClass s => s TH.Name -> PatFV s -> s TH.Name
 underPat s (PatFV bs fs) = fs <> (s `SC.difference` bs)
 
@@ -48,6 +71,7 @@ underPatFV (PatFV bs1 fs1) (PatFV bs2 fs2) = PatFV (bs1 <> bs2) (fs2 <> (fs1 `SC
 freeVarsUnderPat :: (SC.SetClass s, FreeVarsPat a) => s TH.Name -> a -> s TH.Name
 freeVarsUnderPat s p = s `underPat` freeVarsPat p
 
+-- | Bound vars of something.
 boundVars :: (SC.SetClass s, FreeVarsPat a) => a -> s TH.Name
 boundVars = patBound . freeVarsPat
 
@@ -57,6 +81,7 @@ instance FreeVars a => FreeVars (Maybe a) where
 instance FreeVarsPat a => FreeVarsPat (Maybe a) where
     freeVarsPat = maybe mempty id . fmap freeVarsPat
 
+-- | Free variables of a function set.
 freeVarsFunMap :: (IsDesugared l, SC.SetClass s) => FunMap l -> s TH.Name
 freeVarsFunMap = mconcat . map (\(_, (p, s)) -> freeVars s `freeVarsUnderPat` p) . M.toList
 
@@ -199,7 +224,9 @@ substName :: M.Map TH.Name TH.Exp -> TH.Name -> TH.Exp
 substName s n | Just e <- M.lookup n s = e
               | otherwise = TH.VarE n
 
+-- | Things that can have expressions substituted for variables.
 class Subst a where
+    -- | Variable substitution.
     subst :: M.Map TH.Name TH.Exp -> a -> a
 
 instance Subst TH.Exp where
@@ -323,6 +350,7 @@ instance Subst a => Subst [a] where
 instance Subst a => Subst (Maybe a) where
     subst s = fmap (subst s)
 
+-- | Perform a single variable substitution.
 substSingle :: Subst a => TH.Name -> TH.Exp -> a -> a
 substSingle n e = subst (M.singleton n e)
 
@@ -330,12 +358,15 @@ instance Subst VStmt where
     subst su (VExp e) = VExp (subst su e)
     subst su (VCall n e) = VCall n (subst su e)
 
+-- | Rename variables (substitute variables for variables).
 rename :: Subst a => M.Map TH.Name TH.Name -> a -> a
 rename su = subst (M.map TH.VarE su)
 
+-- | Rename a single variable.
 renameSingle :: Subst a => TH.Name -> TH.Name -> a -> a
 renameSingle n n' = substSingle n (TH.VarE n')
 
+-- | Variables bound in @as@ patterns.
 boundAsVars :: TH.Pat -> S.Set TH.Name
 boundAsVars (TH.LitP _) = mempty
 boundAsVars (TH.VarP _) = mempty
@@ -355,6 +386,7 @@ boundAsVars (TH.ListP ps) = mconcat $ map boundAsVars ps
 boundAsVars (TH.SigP p _) = boundAsVars p
 boundAsVars (TH.ViewP _ p) = boundAsVars p
 
+-- | Substitute a pattern for a bound variable in a pattern.
 substPat :: M.Map TH.Name TH.Pat -> TH.Pat -> TH.Pat
 substPat _ p@(TH.LitP _) = p
 substPat s p@(TH.VarP n) | Just p' <- M.lookup n s = p'
@@ -407,6 +439,11 @@ isConstructorExpr (TH.UnboundVarE _) = False
 isConstructorExpr (TH.LabelE _) = False
 isConstructorExpr (TH.ImplicitParamVarE _) = False
 
+{-|
+Expressions that can be substituted without duplicating circuits.
+In digital circuits, constructors are represented as bundles of wires,
+and therefore can be duplicated without a performance penalty.
+-}
 isConstantExpr :: TH.Exp -> Bool
 isConstantExpr (TH.VarE _) = True
 isConstantExpr e = isConstructorExpr e

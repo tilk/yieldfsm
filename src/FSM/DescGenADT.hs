@@ -84,6 +84,10 @@ wildUnused s   (TH.ListP ps) = TH.ListP $ wildUnused s <$> ps
 wildUnused s   (TH.SigP p t) = TH.SigP (wildUnused s p) t
 wildUnused s   (TH.ViewP e p) = TH.ViewP e $ wildUnused s p
 
+{-|
+Compiles the automata descriptions in the target language to Mealy machines
+defined in Clash. This is the final stage of YieldFSM compilation.
+-}
 compileFSM :: FSM -> TH.Q [TH.Dec]
 compileFSM fsm = do
     let nm = TH.nameBase $ fsmName fsm

@@ -52,9 +52,11 @@ prettyNProg np = vcat [prettyInputs (nProgInputs np), prettyFun (nProgFuns np) (
 prettyProg :: Prog l -> Doc
 prettyProg np = vcat [prettyInputs (progInputs np), prettyStmt (progBody np)]
 
+-- | Pretty-printer for 'NProg'.
 prettyNProgHPJ :: NProg l -> HPJ.Doc
 prettyNProgHPJ = to_HPJ_Doc . prettyNProg
 
+-- | Pretty-printer for 'Prog'.
 prettyProgHPJ :: Prog l -> HPJ.Doc
 prettyProgHPJ = to_HPJ_Doc . prettyProg
 

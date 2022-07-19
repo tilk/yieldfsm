@@ -2,7 +2,9 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
-|-}
+
+The YieldFSM compiler.
+-}
 module FSM(fsm) where
 
 import FSM.Lang
@@ -64,6 +66,20 @@ mkFSM str = do
                 hFlush stderr
             fail "FAIL"
 
+{-|
+The YieldFSM compiler as a Template Haskell quasiquoter.
+It compiles YieldFSM programs to Clash definitions.
+
+Example use:
+
+> [fsm|countFSM :: (CP.HiddenClockResetEnable dom)
+>               => CP.Signal dom Integer
+> fun f i:
+>     yield i
+>     ret call f (i+1)
+> ret call f 0
+> |]
+-}
 fsm :: THQ.QuasiQuoter
 fsm = THQ.QuasiQuoter undefined undefined undefined mkFSM
 

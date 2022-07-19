@@ -333,6 +333,7 @@ parseProg = do
     scn *> eof
     return $ Prog i t ps is (if null os then [(TH.mkName "__default", Output (TH.VarE 'undefined))] else os) s
 
+-- | Parser function.
 runParseProg :: String -> TH.Q (Either (ParseErrorBundle String Void) (Prog LvlSugared))
 runParseProg s = runReaderT (runParserT parseProg "" s) prData
 

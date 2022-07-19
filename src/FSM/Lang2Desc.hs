@@ -30,6 +30,9 @@ stmt2dtree (Just _) (SYieldT _ _) = error "Not in final form: two yields in tran
 fun2state :: (TH.Pat, Stmt LvlLowest) -> FSMState
 fun2state (p, s) = FSMState p (stmt2dtree Nothing s)
 
+{-|
+Translates YieldFSM programs (in the final form) to the target language.
+-}
 nprog2desc :: NProg LvlLowest -> FSM
 nprog2desc prog = FSM { 
     fsmName = nProgName prog,
