@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Defines the case integration transform.
 -}
 module FSM.Process.IntegrateCase(integrateCase) where
 
@@ -61,6 +63,26 @@ integrateCaseFunMap fs = M.map f fs
         where
         cm = M.map fromJust $ M.filter isJust $ canIntegrateCaseStmt (boundVars p `S.difference` boundAsVars p) s
 
+{-|
+Case integration transform. If a @case@ statement is used to deconstruct
+a function argument, the case pattern can be integrated into the
+function definition. This transform can enable other optimizations.
+
+Example:
+
+> fun f x:
+>    case x
+>    | (y, z):
+>        yield y
+>        ret call f (y + 1, z - 1)
+
+Is translated to:
+
+> fun f (y, z):
+>    yield y
+>    ret call f (y + 1, z - 1)
+
+-}
 integrateCase :: IsLifted l => NProg l -> NProg l
 integrateCase prog = prog { nProgFuns = integrateCaseFunMap $ nProgFuns prog }
 

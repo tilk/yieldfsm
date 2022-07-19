@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Defines the tuple flattening transform.
 -}
 module FSM.Process.FlattenTuples(flattenTuples) where
 
@@ -84,6 +86,25 @@ isTupP :: TH.Pat -> Bool
 isTupP (TH.TupP _) = True
 isTupP _ = False
 
+{-|
+Tuple flattening transform. Some other transforms lead to deeply nested
+tuples occuring in function parameters, which are unreadable and hard
+to process. This transform flattens tuples in function parameters.
+
+Example:
+
+> fun f ((x, y), z):
+>     ...
+>     ret call f ((a, b), c)
+> ret call f ((1, 2), 3)
+
+Is translated to:
+
+> fun f (x, y, z):
+>     ...
+>     ret call f (a, b, c)
+> ret call f (1, 2, 3)
+-}
 flattenTuples :: IsLifted l => NProg l -> NProg l
 flattenTuples prog = prog {
         nProgFuns = flattenFunMap flatPat $ nProgFuns prog,

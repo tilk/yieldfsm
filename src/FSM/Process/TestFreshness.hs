@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Freshness check.
 -}
 module FSM.Process.TestFreshness(testFreshness) where
 
@@ -53,6 +55,10 @@ testFreshnessFunMap = M.map testFreshnessFun
     where
     testFreshnessFun= flip evalState S.empty . testFreshnessCase
 
+{-|
+Sanity check for testing if all variable names occuring in the programs are
+distinct. This is used because some of the transforms assume this property.
+-}
 testFreshness :: IsDesugared l => NProg l -> NProg l
 testFreshness prog = prog { nProgFuns = testFreshnessFunMap $ nProgFuns prog }
 

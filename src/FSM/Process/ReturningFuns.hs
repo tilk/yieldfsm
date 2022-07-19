@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines returning function analysis.
 -}
 module FSM.Process.ReturningFuns(returningFuns, returningFunsFlat) where
 
@@ -40,9 +42,18 @@ returningFunsH cg ns = saturateSet (flip (M.findWithDefault S.empty) tailCalled)
     where
     tailCalled = M.fromListWith S.union $ map (\e -> (cgEdgeDst e, S.singleton $ cgEdgeSrc e)) $ filter cgEdgeTail cg
 
+{-|
+Performs the returning function analysis. A function is returning if it
+contains a value return statement or tail calls another returning function.
+Returns the set of names of returning functions.
+-}
 returningFuns :: IsDesugared l => Stmt l -> S.Set TH.Name
 returningFuns s = returningFunsH (callGraph s) (directRet s)
 
+{-|
+Performs the returning function analysis. Variant for 'FunMap',
+used on lambda-lifted programs.
+-}
 returningFunsFlat :: IsDesugared l => FunMap l -> S.Set TH.Name
 returningFunsFlat fs = returningFunsH (callGraphFlat fs) (directRetFunMap fs)
 

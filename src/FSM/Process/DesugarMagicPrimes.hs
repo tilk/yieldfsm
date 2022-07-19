@@ -2,8 +2,10 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines magic prime desugaring.
 -}
-module FSM.Process.PreviousInputs(previousInputs) where
+module FSM.Process.DesugarMagicPrimes(desugarMagicPrimes) where
 
 import FSM.Lang
 import FSM.FreeVars
@@ -35,8 +37,31 @@ primName n k = TH.mkName $ n ++ replicate k '\''
 addVar :: (IsDesugared l, WithAssign l) => TH.Name -> Stmt l -> Stmt l
 addVar n = SLet VarMut n (VExp $ TH.VarE 'CP.undefined)
 
-previousInputs :: (IsDesugared l, WithAssign l) => Prog l -> Prog l
-previousInputs prog 
+{-|
+Desugars magic primes. References to inputs with primes are replaced with
+additional mutable variables, holding previous values of these inputs.
+
+Example:
+
+> input i
+> forever:
+>     yield i
+>     if i':
+>         yield True
+
+Is translated to:
+
+> input i
+> var i' = undefined
+> forever:
+>     i' = i
+>     yield i
+>     if i':
+>         i' = i
+>         yield True
+-}
+desugarMagicPrimes :: (IsDesugared l, WithAssign l) => Prog l -> Prog l
+desugarMagicPrimes prog 
     | length pvars > 0 = prog { progBody = flip (foldr addVar) (map fst pvars) $ updateYieldsStmt (map (\(n, n') -> SAssign n (TH.VarE n')) pvars) $ progBody prog }
     | otherwise = prog
     where

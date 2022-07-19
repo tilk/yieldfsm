@@ -34,8 +34,8 @@ mkFSM str = do
             p1 <- desugarLoops =<< desugarOutputs p
             TH.runIO $ hPutStrLn stderr $ "desugarLoops:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p1
-            p' <- fmap previousInputs . refreshVars =<< refreshFunctions p1
-            TH.runIO $ hPutStrLn stderr $ "previousInputs:"
+            p' <- fmap desugarMagicPrimes . refreshVars =<< refreshFunctions p1
+            TH.runIO $ hPutStrLn stderr $ "desugarMagicPrimes:"
             TH.runIO $ hPutStrLn stderr $ HPJ.render $ prettyProgHPJ p'
             p'' <- simplifyCase <$> makeLocalVars p'
             TH.runIO $ hPutStrLn stderr $ "makeLocalVars:"

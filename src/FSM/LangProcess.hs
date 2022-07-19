@@ -7,7 +7,7 @@ Program transformations.
 -}
 module FSM.LangProcess(
     lambdaLift, refreshFunctions, normalization, removeEpsilon, makeLocalVars,
-    stackReify, previousInputs, flattenTuples,
+    stackReify, desugarMagicPrimes, flattenTuples,
     foldInit, refreshVars, simplifyCase, simplifyCaseN, simplifyCaseNFull,
     cleanUnusedConstructors, cleanUnusedArgs, cleanUnusedConts,
     argumentPropagation, integrateCase, testFreshness, desugarLoops,
@@ -23,7 +23,7 @@ import FSM.Process.RemoveEpsilon
 import FSM.Process.LambdaLift
 import FSM.Process.FoldInit
 import FSM.Process.SimplifyCase
-import FSM.Process.PreviousInputs
+import FSM.Process.DesugarMagicPrimes
 import FSM.Process.FlattenTuples
 import FSM.Process.CleanUnusedConstructors
 import FSM.Process.CleanUnusedArgs

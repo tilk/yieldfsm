@@ -2,6 +2,10 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Defines case and let statement simplification transform.
+
+Note: this transform does too many things and possibly needs to be refactored.
 -}
 module FSM.Process.SimplifyCase(
     simplifyCase, simplifyCaseN, simplifyCaseNFull, simplifyCaseGen, mkLetGen
@@ -32,6 +36,11 @@ matchableExp (TH.UnboxedSumE _ _ _) = True
 matchableExp (TH.RecConE _ _) = True
 matchableExp _ = False
 
+{-|
+Tries to match an expression to a pattern, and binds the subexpressions
+to corresponding variables. This is an internal function, exported
+for use in other transforms.
+-}
 simplifyCaseGen :: (TH.Name -> TH.Exp -> a -> a) -> TH.Exp -> TH.Pat -> a -> MMaybe a
 simplifyCaseGen m e (TH.VarP n) s = MJust $ m n e s
 simplifyCaseGen _ (TH.LitE l) (TH.LitP l') s | l == l' = MJust s
@@ -55,6 +64,11 @@ simplifyCaseDo m e cs = mmaybe (SCase e (map (simplifyCaseCase m) cs)) id $ msum
 simplifyCaseCase :: IsDesugared l => KindMap -> (TH.Pat, Stmt l) -> (TH.Pat, Stmt l)
 simplifyCaseCase m (p, s) = (p, simplifyCaseStmt (setVars VarLet (boundVars p) m) s)
 
+{-|
+Creates a let definition or substitutes it, depending on correctness and
+performance considerations. This is an internal function, exported for
+use in other transforms.
+-}
 mkLetGen :: (FreeVars a, Subst a) => (KindMap -> a -> a) -> (TH.Name -> TH.Exp -> a -> a) -> KindMap -> TH.Name -> TH.Exp -> a -> a
 mkLetGen f g m n e s
     | (TH.VarE n') <- e, Just VarLet <- M.lookup n' m = f m $ substSingle n e s
@@ -85,16 +99,40 @@ simplifyCaseStmt m   (SLet t n vs s) = SLet t n vs (simplifyCaseStmt m s)
 simplifyCaseFunMap :: IsDesugared l => KindMap -> FunMap l -> FunMap l
 simplifyCaseFunMap m = M.map (simplifyCaseCase m)
 
+{-|
+Case and let statement simplification transform.
+When the matching case is statically known, the @case@ statement is replaced
+with @let@ definitions. This transform also substitutes @let@ definitions,
+when correctness and performance considerations allow it.
+
+Example:
+
+> case (1, 2)
+> | (x, y):
+>     yield x + y
+
+Is translated to:
+
+> yield 1 + 2
+-}
 simplifyCase :: IsDesugared l => Prog l -> Prog l
 simplifyCase prog = prog { progBody = simplifyCaseStmt m $ progBody prog }
     where
     m = setVars VarMut (boundVars $ progInputs prog) $ setVars VarLet (freeVars $ progBody prog) M.empty
 
+{-|
+Case and let statement simplification transform.
+Variant for 'NProg'.
+-}
 simplifyCaseN :: IsDesugared l => NProg l -> NProg l
 simplifyCaseN prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
     where
     m = setVars VarMut (boundVars $ nProgInputs prog) $ setVars VarLet (freeVarsFunMap $ nProgFuns prog) M.empty
 
+{-|
+Case and let statement simplification transform.
+Variant for 'NProg', correct only for normalized programs.
+-}
 simplifyCaseNFull :: IsDesugared l => NProg l -> NProg l
 simplifyCaseNFull prog = prog { nProgFuns = simplifyCaseFunMap m $ nProgFuns prog }
     where

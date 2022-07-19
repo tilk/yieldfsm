@@ -1,3 +1,10 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+Defines the hoisting from constructors transform.
+-}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.HoistFromConstructors(hoistFromConstructors) where
 
@@ -49,6 +56,23 @@ hoistCase (p, s) = (p,) <$> hoistStmt s
 hoistFunMap :: (MonadRefresh m, IsLowered l) => FunMap l -> m (FunMap l)
 hoistFunMap = mapM hoistCase
 
+{-|
+Hoisting from constructors transform. For correctness and performance reasons,
+only constructor expressions (built only from constructors, constants and variables)
+are considered for substitution. This limitation can inhibit other optimizations.
+This transform creates new let definitions for constructor arguments, splitting
+large expressions into smaller ones which could be eligible for substitution.
+
+Example:
+
+> let x = (f a, g b)
+
+Is translated to:
+
+> let y = f a
+> let z = g b
+> let x = (y, z)
+-}
 hoistFromConstructors :: (MonadRefresh m, IsLowered l) => NProg l -> m (NProg l)
 hoistFromConstructors prog = do
     prog' <- hoistFunMap $ nProgFuns prog

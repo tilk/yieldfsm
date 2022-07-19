@@ -115,7 +115,7 @@ library
     FSM.Process.CleanUnusedArgs
     FSM.Process.CleanUnusedConstructors
     FSM.Process.FlattenTuples
-    FSM.Process.PreviousInputs
+    FSM.Process.DesugarMagicPrimes
     FSM.Process.StackReify
     FSM.Process.CallGraph
     FSM.Process.ReturningFuns

@@ -332,7 +332,7 @@ The source of the YieldFSM compiler is present in the `src/FSM` directory.
 
 Various transformations are defined in the `src/FSM/Process` directory, including:
 
-* Desugaring - `DesugarOutputs.hs`, `DesugarLoops.hs`, some desugaring also occurs in the parser.
+* Desugaring - `DesugarOutputs.hs`, `DesugarLoops.hs`, `DesugarMagicPrimes.hs`, some desugaring also occurs in the parser.
 * Local mutable variables - `MakeLocalVars.hs`.
 * Lambda lifting - `LambdaLift.hs`.
 * Normalization - `Normalization.hs`.
