@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines a variable refreshing transformation.
 -}
 module FSM.Process.RefreshVars(refreshVars) where
 
@@ -26,6 +28,10 @@ refreshVarsStmt m (SCase e cs) = SCase (rename m e) <$> mapM (refreshVarsCase m)
 refreshVarsStmt m (SFun fs s) =  SFun <$> mapM (refreshVarsCase m) fs <*> refreshVarsStmt m s
 refreshVarsStmt m s = return $ rename m s
 
+{-|
+Refreshes all bound variables (@let@ and @case@ statements).
+Some transformations assume that bound variable names are unique.
+-}
 refreshVars :: (IsDesugared l, MonadRefresh m) => Prog l -> m (Prog l)
 refreshVars prog = do
     s <- refreshVarsStmt M.empty $ progBody prog

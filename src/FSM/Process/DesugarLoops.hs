@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines the loop desugaring transformation.
 -}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.DesugarLoops(desugarLoops) where
@@ -82,6 +84,24 @@ desugarLoopsStmt (SIf e st sf) = SIf e <$> desugarLoopsStmt st <*> desugarLoopsS
 desugarLoopsStmt (SCase e cs) = SCase e <$> mapM (\(p, s) -> (p,) <$> desugarLoopsStmt s) cs
 desugarLoopsStmt (SNop) = return SNop
 
+{-|
+Desugars loops. In YieldFSM, loops are syntactic sugar for recursive
+functions. To keep the parser simple, loop desugaring is performed
+in a separate transformation.
+
+Example:
+
+> while x:
+>     yield y
+
+Is translated to:
+
+> fun while ():
+>     if x:
+>         yield y
+>         ret call while ()
+> call while ()
+-}
 desugarLoops :: (Qlift m, MonadRefresh m) => Prog LvlLoops -> m (Prog LvlFull)
 desugarLoops prog = do
     b <- flip runReaderT (RData Nothing) $ desugarLoopsStmt $ progBody prog

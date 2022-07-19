@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines a function name refreshing transformation.
 -}
 module FSM.Process.RefreshFunctions(refreshFunctions) where
 
@@ -32,6 +34,10 @@ refreshFunctionsStmt m (SFun fs s) = do
     m' <- (`M.union` m) <$> (forWithKeyM fs $ \f _ -> refreshName f)
     SFun <$> (M.fromList <$> forM (M.toList fs) (\(f, (p, s')) ->  (fromJust $ M.lookup f m', ) . (p,) <$> refreshFunctionsStmt m' s')) <*> refreshFunctionsStmt m' s
 
+{-|
+Refreshes all function names. This is useful before lambda-lifting, which
+puts every function into a single namespace.
+-}
 refreshFunctions :: (IsDesugared l, MonadRefresh m) => Prog l -> m (Prog l)
 refreshFunctions prog = do
     s <- refreshFunctionsStmt M.empty $ progBody prog

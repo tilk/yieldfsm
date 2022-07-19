@@ -2,6 +2,8 @@
 Copyright  :  (C) 2022 Marek Materzok
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines the named outputs desugaring transformation.
 -}
 {-# LANGUAGE FlexibleContexts #-}
 module FSM.Process.DesugarOutputs(desugarOutputs) where
@@ -67,6 +69,33 @@ desugarOutputsStmt (SNop) = return SNop
 outputVar :: (TH.Name, Output) -> Stmt LvlLoops -> Stmt LvlLoops
 outputVar (n, o) s = SLet VarMut n (VExp $ outputDefault o) s
 
+{-|
+Desugars named outputs. Each named output becomes a part of the output
+tuple. To handle @output@ statements, mutable variables are used.
+
+Example:
+
+> output a = False
+> output b = False
+> forever:
+      output<b> True
+      yield
+      yield<a> True
+
+Is translated to:
+
+> var a = False
+> var b = False
+> forever:
+>     b = True
+>     yield (a, b)
+>     a = False
+>     b = False
+>     a = True
+>     yield (a, b)
+>     a = False
+>     b = False
+-}
 desugarOutputs :: (Qlift m, MonadRefresh m) => Prog LvlSugared -> m (Prog LvlLoops)
 desugarOutputs prog = do
     ns <- mapWithKeyM (\k _ -> refreshName k) $ M.fromList $ progOutputs prog

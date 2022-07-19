@@ -1,3 +1,10 @@
+{-|
+Copyright  :  (C) 2022 Marek Materzok
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  Marek Materzok <tilk@tilk.eu>
+
+This module defines an argument deduplication transformation.
+-}
 module FSM.Process.DeduplicateArgs(deduplicateArgs) where
 
 import FSM.Lang
@@ -83,6 +90,29 @@ fixpoint f a | b == a    = b
              | otherwise = fixpoint f b
     where b = f a
 
+{-|
+Deduplicates function arguments. Some transformations lead to passing
+the same value to a function multiple times using multiple arguments.
+This optimization detects such situations and selects one of the duplicates
+as the canonical one, leaving the others to be cleaned by other
+optimizations.
+
+Example:
+
+> fun f (x, y):
+>     yield x
+>     yield y
+>     ret call f (x, y)
+> ret call f (0, 0)
+
+Is translated to:
+
+> fun f (x, y):
+>     yield x
+>     yield x
+>     ret call f (x, x)
+> ret call f (0, 0)
+-}
 deduplicateArgs :: IsLowered l => NProg l -> NProg l
 deduplicateArgs prog = prog { nProgFuns = M.mapWithKey (\k -> id *** subst (dupSubst $ lookupDup k ds)) fs }
     where
