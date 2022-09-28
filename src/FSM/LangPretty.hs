@@ -32,7 +32,10 @@ prettyStmt (SYield e) = prettyKeyword "yield" <+> TH.ppr e
 prettyStmt (SYieldT e s) = vcat [prettyKeyword "yield" <+> TH.ppr e, prettyStmt s]
 prettyStmt (SRet vs) = prettyKeyword "ret" <+> prettyVStmt vs
 prettyStmt (SFun fs s) = prettyFun fs s
-prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> TH.ppr e <> prettyKeyword ":", nest 4 (prettyStmt st), prettyKeyword "else:", nest 4 (prettyStmt sf)]
+prettyStmt (SIf e st sf) = vcat [prettyKeyword "if" <+> TH.ppr e <> prettyKeyword ":", nest 4 (prettyStmt st), prettyElse sf]
+    where
+    prettyElse (SIf e' st' sf') = vcat [prettyKeyword "elif" <+> TH.ppr e' <> prettyKeyword ":", nest 4 (prettyStmt st'), prettyElse sf']
+    prettyElse s = vcat [prettyKeyword "else:", nest 4 (prettyStmt s)]
 prettyStmt (SBlock ss) = vcat (map prettyStmt ss)
 prettyStmt (SCase e cs) = vcat [prettyKeyword "case" <+> TH.ppr e, vcat (map f cs)]
     where f (p, s) = vcat [prettyKeyword "|" <+> TH.ppr p <> prettyKeyword ":", nest 4 $ prettyStmt s]
