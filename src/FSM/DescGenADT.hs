@@ -99,12 +99,12 @@ compileFSM fsm = do
         (tps, tp) <- compilePat $ fsmStateParams s 
         return (tps, TH.NormalC (conName cn n) [(b, tp)])
     let stateCons = map snd stateData
-    let tvars = map TH.PlainTV $ fst =<< stateData
+    let tvars = map (flip TH.PlainTV ()) $ fst =<< stateData
     funcClauses <- forM (M.assocs $ fsmStates fsm) $ \(n, s) -> do
         TH.clause [TH.conP (conName cn n) [pure $ fsmStateParams s], pure $ wildUnused (freeVars $ fsmStateTrans s) $ maybe (TH.TupP []) id $ fsmInputs fsm] (TH.normalB $ compileDT cn $ fsmStateTrans s) []
     contDecls <- forM (M.assocs $ fsmConts fsm) $ \(n, cs) -> do
         contCons <- forM (M.assocs cs) $ \(n', ns) -> return $ TH.NormalC n' [(b, tupT $ map TH.VarT ns)]
-        let contTvars = map TH.PlainTV $ nub $ concat (M.elems cs)
+        let contTvars = map (flip TH.PlainTV ()) $ nub $ concat (M.elems cs)
         return $ TH.DataD [] n contTvars Nothing contCons [derivclause]
     return $ TH.DataD [] stateName tvars Nothing stateCons [derivclause] :
                 TH.SigD (fsmName fsm) (fsmType fsm) :

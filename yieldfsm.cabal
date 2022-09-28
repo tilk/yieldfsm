@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                yieldfsm
-version:             0.1
+version:             0.2.0
 license:             BSD-2-Clause
 author:              Marek Materzok <tilk@tilk.eu>
 maintainer:          Marek Materzok <tilk@tilk.eu>
@@ -65,21 +65,21 @@ common common-options
     -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
   build-depends:
-    base >= 4.14 && < 4.15,
+    base >= 4.15 && < 4.16,
     Cabal,
     template-haskell,
     containers >= 0.6 && < 0.7,
-    megaparsec >= 9.0.0 && < 9.1,
+    megaparsec >= 9.2.2 && < 9.3,
     unordered-containers >= 0.2 && < 0.3,
     haskell-src-meta >= 0.8 && < 0.9,
     haskell-src-exts >= 1.23 && < 1.24,
     pretty >= 1.1 && < 1.2,
     mtl >= 2.2 && < 2.3,
-    lens >= 4.19 && < 4.20,
+    lens >= 5.0.1 && < 5.1,
     keys >= 3.12 && < 3.13,
 
     -- clash-prelude will set suitable version bounds for the plugins
-    clash-prelude >= 1.2.5 && < 1.6,
+    clash-prelude >= 1.6.4 && < 1.7,
     ghc-typelits-natnormalise,
     ghc-typelits-extra,
     ghc-typelits-knownnat

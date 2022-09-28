@@ -36,8 +36,8 @@ instance FreeConstructors TH.Exp where
     freeConstructorsPat (TH.MultiIfE ges) = mconcat $ map freeConstructorsPat ges
     freeConstructorsPat (TH.LetE ds e) = freeConstructorsPat e <> freeConstructorsPat ds
     freeConstructorsPat (TH.CaseE e ms) = freeConstructorsPat e <> freeConstructorsPat ms
-    freeConstructorsPat (TH.DoE ss) = freeConstructorsPat ss
-    freeConstructorsPat (TH.MDoE ss) = freeConstructorsPat ss
+    freeConstructorsPat (TH.DoE _ ss) = freeConstructorsPat ss
+    freeConstructorsPat (TH.MDoE _ ss) = freeConstructorsPat ss
     freeConstructorsPat (TH.CompE ss) = freeConstructorsPat ss
     freeConstructorsPat (TH.ArithSeqE r) = freeConstructorsPat r
     freeConstructorsPat (TH.ListE es) = freeConstructorsPat es
