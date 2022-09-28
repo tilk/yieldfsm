@@ -197,7 +197,19 @@ parseIf :: Parser (Stmt LvlSugared)
 parseIf = do
     (lvl, e) <- parseHsFoldColon stringToHsExp (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "if")
     SIf e <$> (L.indentGuard scn GT lvl *> parseStmt)
-          <*> ((try (L.indentGuard scn EQ lvl *> singleSymbolColon "else") *> L.indentGuard scn GT lvl *> parseStmt) <|> return SNop)
+          <*> parseElifElse lvl
+
+parseElif :: Pos -> Parser (Stmt LvlSugared)
+parseElif lvl = do
+    SIf <$> parseHsFoldColon stringToHsExp (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "elif" *> return id)
+        <*> (L.indentGuard scn GT lvl *> parseStmt)
+        <*> parseElifElse lvl
+
+parseElse :: Pos -> Parser (Stmt LvlSugared)
+parseElse lvl = (try (L.indentGuard scn EQ lvl *> singleSymbolColon "else") *> L.indentGuard scn GT lvl *> parseStmt)
+
+parseElifElse :: Pos -> Parser (Stmt LvlSugared)
+parseElifElse lvl = parseElif lvl <|> parseElse lvl <|> return SNop
 
 parseFun :: Parser (Stmt LvlSugared)
 parseFun = do
