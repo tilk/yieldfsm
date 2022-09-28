@@ -276,8 +276,18 @@ parseCase = do
     return $ SCase e (addWildP cs)
 
 addWildP :: [(TH.Pat, Stmt LvlSugared)] -> [(TH.Pat, Stmt LvlSugared)]
-addWildP cs | TH.WildP `elem` map fst cs = cs
+addWildP cs | any isCatchAllPat (map fst cs) = cs
             | otherwise = cs ++ [(TH.WildP, SNop)]
+
+isCatchAllPat :: TH.Pat -> Bool
+isCatchAllPat TH.WildP = True
+isCatchAllPat (TH.VarP _) = True
+isCatchAllPat (TH.TildeP _) = True
+isCatchAllPat (TH.ParensP p) = isCatchAllPat p
+isCatchAllPat (TH.BangP p) = isCatchAllPat p
+isCatchAllPat (TH.AsP _ p) = isCatchAllPat p
+isCatchAllPat (TH.SigP p _) = isCatchAllPat p
+isCatchAllPat _ = False
 
 parseNop :: Parser (Stmt LvlSugared)
 parseNop = singleSymbol "skip" *> return SNop
