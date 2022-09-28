@@ -273,7 +273,11 @@ parseCase = do
     cs <- some $ do
         pat <- parseHsFoldColon stringToHsPat (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id)
         (pat,) <$> (locally prDataVars (M.union $ boundVarsEnv pat) $ L.indentGuard scn GT lvl *> parseStmt)
-    return $ SCase e (cs ++ [(TH.WildP, SNop)])
+    return $ SCase e (addWildP cs)
+
+addWildP :: [(TH.Pat, Stmt LvlSugared)] -> [(TH.Pat, Stmt LvlSugared)]
+addWildP cs | TH.WildP `elem` map fst cs = cs
+            | otherwise = cs ++ [(TH.WildP, SNop)]
 
 parseNop :: Parser (Stmt LvlSugared)
 parseNop = singleSymbol "skip" *> return SNop
