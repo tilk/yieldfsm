@@ -270,8 +270,9 @@ parseDoWhile = do
 parseCase :: Parser (Stmt LvlSugared)
 parseCase = do
     (lvl, e) <- parseHsFold stringToHsExp (\sc' -> (,) <$> L.indentLevel <* L.symbol sc' "case")
-    cs <- some $ (,) <$> parseHsFoldColon stringToHsPat (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id)
-                     <*> (L.indentGuard scn GT lvl *> parseStmt)
+    cs <- some $ do
+        pat <- parseHsFoldColon stringToHsPat (\sc' -> L.indentGuard scn EQ lvl *> L.symbol sc' "|" *> return id)
+        (pat,) <$> (locally prDataVars (M.union $ boundVarsEnv pat) $ L.indentGuard scn GT lvl *> parseStmt)
     return $ SCase e (cs ++ [(TH.WildP, SNop)])
 
 parseNop :: Parser (Stmt LvlSugared)
